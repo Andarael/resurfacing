@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.14)
+project(imgui)
+
+# Set the path to the imgui source files
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
+
+# Define the imgui library
+file(GLOB IMGUI_SOURCES ${IMGUI_DIR}/*.cpp ${IMGUI_DIR}/*.h)
+
+file(GLOB IMGUI_BACKENDS 
+	${IMGUI_DIR}/backends/imgui_impl_glfw.cpp 
+	${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp)
+
+add_library(imgui STATIC ${IMGUI_SOURCES} ${IMGUI_BACKENDS})
+
+target_include_directories(imgui PUBLIC 
+    ${IMGUI_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}
+    ${IMGUI_DIR}/backends
+    ${Vulkan_INCLUDE_DIRS})
+
+target_link_libraries(imgui glfw)
+

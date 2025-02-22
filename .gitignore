@@ -1,0 +1,56 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# build
+build
+clutter.log
+performance.log
+
+.idea/*
+.vs/*
+**/CMakeFiles/*
+*.spv
+*.pdb
+*.dir/*
+*.sln
+*.vcx*
+x64/*
+CMakeCache.txt
+*.cmake
+.cache/*
+cmake-build-debug/*
+/cmake-build-debug-mingw
+_deps/*
+imgui.ini
+*.raddbgi
+/RelWithDebInfo
+vulkan_dispatch_log.txt
