@@ -37,6 +37,7 @@ struct Texture {
     vk::DeviceMemory memory;
     vk::Format format;
     uvec3 dimensions = {0, 0, 0};
+    vk::ImageView defaultView;
 
 };
 
@@ -56,6 +57,17 @@ struct QueueFamilyIndices {
     uint32 transferQueueIndex = ~0U;
 
     bool isComplete() const { return presentQueueIndex != ~0U && graphicsQueueIndex != ~0U && computeQueueIndex != ~0U && transferQueueIndex != ~0U; }
+};
+
+struct FrameResources {
+    vk::Semaphore imageAvailableSemaphore; // Signals when the image is ready for rendering
+    vk::Semaphore renderFinishedSemaphore; // Signals when rendering is finished
+};
+
+struct FrameData {
+    vk::CommandPool commandPool;
+    vk::CommandBuffer commandBuffer;
+    uint64 frameNumber;
 };
 
 // Functions
@@ -78,6 +90,35 @@ static std::pair<vk::PipelineStageFlags2, vk::AccessFlags2> makePipelineStageAcc
     }
     }
 };
+
+/*-- Simple helper for the creation of a temporary command buffer, use to record the commands to upload data, or transition images. -*/
+static vk::CommandBuffer beginSingleTimeCommands(vk::Device p_logicalDevice, vk::CommandPool p_commandPool) {
+    const vk::CommandBufferAllocateInfo allocInfo(p_commandPool, vk::CommandBufferLevel::ePrimary, 1);
+    vk::CommandBuffer commandBuffer{};
+    VK_CHECK(p_logicalDevice.allocateCommandBuffers(&allocInfo, &commandBuffer));
+    commandBuffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    return commandBuffer;
+}
+
+/*-- 
+ * Submit the temporary command buffer, wait until the command is finished, and clean up. 
+ * This is a blocking function and should be used only for small operations 
+--*/
+static void endSingleTimeCommands(vk::CommandBuffer p_commandBuffer, vk::Device p_logicalDevice, vk::CommandPool p_commandPool, vk::Queue p_queue) {
+    p_commandBuffer.end();
+    const vk::FenceCreateInfo fenceInfo{};
+    std::array<vk::Fence, 1> fence{};
+    VK_CHECK(p_logicalDevice.createFence(&fenceInfo, nullptr, fence.data()));
+
+    const vk::CommandBufferSubmitInfo cmdBufferInfo{p_commandBuffer};
+    const std::array<vk::SubmitInfo2, 1> submitInfo{vk::SubmitInfo2{{}, 0, nullptr, 0, &cmdBufferInfo, 0, nullptr}};
+    VK_CHECK(p_queue.submit2(uint32(submitInfo.size()), submitInfo.data(), fence[0]));
+    VK_CHECK(p_logicalDevice.waitForFences(uint32(fence.size()), fence.data(), true, UINT64_MAX));
+
+    // Cleanup
+    p_logicalDevice.destroyFence(fence[0], nullptr);
+    p_logicalDevice.freeCommandBuffers(p_commandPool, 1, &p_commandBuffer);
+}
 
 // Return the barrier with the most common pair of stage and access flags for a given layout
 static vk::ImageMemoryBarrier2 createImageMemoryBarrier(vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::ImageSubresourceRange subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}) {
@@ -207,4 +248,47 @@ static bool isDeviceSuitable(vk::PhysicalDevice p_device, const std::vector<cons
 
     std::cout << "Device " << deviceName << " is suitable." << '\n';
     return true;
+}
+
+
+static vk::SurfaceFormat2KHR selectSwapSurfaceFormat(const std::vector<vk::SurfaceFormat2KHR> &availableFormats) {
+    if (availableFormats.size() == 1 && availableFormats[0].surfaceFormat.format == vk::Format::eUndefined) { return {{vk::Format::eB8G8R8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear}}; }
+
+    const std::vector<vk::SurfaceFormat2KHR> preferredFormats = {
+        {{vk::Format::eB8G8R8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear}},
+        {{vk::Format::eR8G8B8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear}}};
+
+    // Check available formats against the preferred formats.
+    for (const auto &preferredFormat : preferredFormats) {
+        for (const auto &availableFormat : availableFormats) {
+            if (availableFormat.surfaceFormat.format == preferredFormat.surfaceFormat.format
+                && availableFormat.surfaceFormat.colorSpace == preferredFormat.surfaceFormat.colorSpace) { return availableFormat; }
+        }
+    }
+
+    return availableFormats[0];
+}
+
+static vk::PresentModeKHR selectSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes, bool vsync) {
+    // Fifo is the only mode guaranteed to be available
+    if (vsync) { return vk::PresentModeKHR::eFifo; }
+
+    bool mailboxSupported = false, immediateSupported = false;
+
+    for (vk::PresentModeKHR mode : availablePresentModes) {
+        if (mode == vk::PresentModeKHR::eMailbox)
+            mailboxSupported = true;
+        if (mode == vk::PresentModeKHR::eImmediate)
+            immediateSupported = true;
+    }
+
+    if (mailboxSupported) {
+        return vk::PresentModeKHR::eMailbox; // vsync presentation, render as fast as possible
+    }
+
+    if (immediateSupported) {
+        return vk::PresentModeKHR::eImmediate; // presentation as soon as possible
+    }
+
+    return vk::PresentModeKHR::eFifo; // Only mode guaranteed to be available
 }
