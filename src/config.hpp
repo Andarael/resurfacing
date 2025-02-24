@@ -3,6 +3,7 @@
 #include <iostream>
 
 #define ROOT_IDENTIFIER ".root"
+constexpr bool enableValidationLayers = true;
 
 inline void setWorkingDirectoryToProjectRoot() {
     std::filesystem::path exePath = std::filesystem::current_path();

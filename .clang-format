@@ -1,0 +1,23 @@
+Language: Cpp
+BasedOnStyle: Microsoft
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+
+# if it fits on one line, we can keep it on one line
+AllowShortFunctionsOnASingleLine: All
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine : true
+
+
+BreakBeforeBraces: Attach
+IndentCaseLabels: false
+ColumnLimit: 0
+AccessModifierOffset: -4
+FixNamespaceComments: true
+NamespaceIndentation: None
+AlignArrayOfStructures: Left

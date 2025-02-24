@@ -15,18 +15,17 @@
 #include "glm/gtc/type_ptr.hpp"
 
 
-
 // Data structures
 struct Bone {
-    int nodeIndex;                // Index of the node in the glTF model
-    std::string name;             // Name of the bone
-    int parentIndex;              // Index of the parent bone (-1 if root)
+    int nodeIndex; // Index of the node in the glTF model
+    std::string name; // Name of the bone
+    int parentIndex; // Index of the parent bone (-1 if root)
     std::vector<int> childrenIndices; // Indices of child bones
-    glm::mat4 inverseBindMatrix;  // Inverse bind matrix
-    glm::mat4 localTransform;     // Local transform (animation applied)
-    glm::vec3 animTranslation;    // Animated translation
-    glm::quat animRotation;       // Animated rotation
-    glm::vec3 animScale;          // Animated scale
+    glm::mat4 inverseBindMatrix; // Inverse bind matrix
+    glm::mat4 localTransform; // Local transform (animation applied)
+    glm::vec3 animTranslation; // Animated translation
+    glm::quat animRotation; // Animated rotation
+    glm::vec3 animScale; // Animated scale
 };
 
 struct Skeleton {
@@ -34,27 +33,27 @@ struct Skeleton {
 };
 
 // Helper functions
-glm::mat4 getNodeTransform(const tinygltf::Node& node);
-glm::vec3 getNodeTranslation(const tinygltf::Node& node);
-glm::quat getNodeRotation(const tinygltf::Node& node);
-glm::vec3 getNodeScale(const tinygltf::Node& node);
+glm::mat4 getNodeTransform(const tinygltf::Node &node);
+glm::vec3 getNodeTranslation(const tinygltf::Node &node);
+glm::quat getNodeRotation(const tinygltf::Node &node);
+glm::vec3 getNodeScale(const tinygltf::Node &node);
 
 // Function to extract skeleton
-void extractSkeleton(const tinygltf::Model& model, Skeleton& skeleton) {
+void extractSkeleton(const tinygltf::Model &model, Skeleton &skeleton) {
     if (model.skins.empty()) {
         std::cerr << "No skins found in the glTF model." << std::endl;
         return;
     }
 
-    const tinygltf::Skin& skin = model.skins[0];
+    const tinygltf::Skin &skin = model.skins[0];
 
     // Load inverse bind matrices
     std::vector<glm::mat4> inverseBindMatrices;
     if (skin.inverseBindMatrices >= 0) {
-        const tinygltf::Accessor& accessor = model.accessors[skin.inverseBindMatrices];
-        const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-        const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-        const unsigned char* dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+        const tinygltf::Accessor &accessor = model.accessors[skin.inverseBindMatrices];
+        const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+        const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+        const unsigned char *dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
 
         size_t numMatrices = accessor.count;
         inverseBindMatrices.resize(numMatrices);
@@ -65,9 +64,9 @@ void extractSkeleton(const tinygltf::Model& model, Skeleton& skeleton) {
     skeleton.bones.resize(skin.joints.size());
     for (size_t i = 0; i < skin.joints.size(); ++i) {
         int nodeIndex = skin.joints[i];
-        const tinygltf::Node& node = model.nodes[nodeIndex];
+        const tinygltf::Node &node = model.nodes[nodeIndex];
 
-        Bone& bone = skeleton.bones[i];
+        Bone &bone = skeleton.bones[i];
         bone.nodeIndex = nodeIndex;
         bone.name = node.name;
         bone.parentIndex = -1; // Default to -1 (no parent)
@@ -83,7 +82,7 @@ void extractSkeleton(const tinygltf::Model& model, Skeleton& skeleton) {
 
         // Find parent bone
         for (size_t j = 0; j < skin.joints.size(); ++j) {
-            const tinygltf::Node& parentNode = model.nodes[skin.joints[j]];
+            const tinygltf::Node &parentNode = model.nodes[skin.joints[j]];
             if (std::find(parentNode.children.begin(), parentNode.children.end(), nodeIndex) != parentNode.children.end()) {
                 bone.parentIndex = j;
                 skeleton.bones[j].childrenIndices.push_back(i);
@@ -94,20 +93,18 @@ void extractSkeleton(const tinygltf::Model& model, Skeleton& skeleton) {
 }
 
 // Recursive function to compute global transform
-void computeGlobalTransform(const Skeleton& skeleton, int boneIndex, std::vector<glm::mat4>& globalTransforms) {
-    const Bone& bone = skeleton.bones[boneIndex];
+void computeGlobalTransform(const Skeleton &skeleton, int boneIndex, std::vector<glm::mat4> &globalTransforms) {
+    const Bone &bone = skeleton.bones[boneIndex];
 
     glm::mat4 localTransform = bone.localTransform;
 
     if (bone.parentIndex != -1) {
         computeGlobalTransform(skeleton, bone.parentIndex, globalTransforms);
         globalTransforms[boneIndex] = globalTransforms[bone.parentIndex] * localTransform;
-    } else {
-        globalTransforms[boneIndex] = localTransform;
-    }
+    } else { globalTransforms[boneIndex] = localTransform; }
 }
 
-void computeBoneMatrices(const Skeleton& skeleton, std::vector<glm::mat4>& boneMatrices) {
+void computeBoneMatrices(const Skeleton &skeleton, std::vector<glm::mat4> &boneMatrices) {
     boneMatrices.resize(skeleton.bones.size());
     std::vector<glm::mat4> globalTransforms(skeleton.bones.size());
 
@@ -137,7 +134,7 @@ struct KeyFrame {
 struct AnimationChannel {
     int boneIndex;
     std::string path; // "translation", "rotation", or "scale"
-    std::string interpolation;  // "LINEAR", "STEP", or "CUBICSPLINE"
+    std::string interpolation; // "LINEAR", "STEP", or "CUBICSPLINE"
     std::vector<KeyFrame> keyframes;
 };
 
@@ -147,14 +144,14 @@ struct Animation {
     std::vector<AnimationChannel> channels;
 };
 
-void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, std::vector<Animation>& animations) {
-    for (const auto& gltfAnimation : model.animations) {
+void extractAnimations(const tinygltf::Model &model, const Skeleton &skeleton, std::vector<Animation> &animations) {
+    for (const auto &gltfAnimation : model.animations) {
         Animation animation;
         animation.name = gltfAnimation.name;
         animation.duration = 0.0f;
 
-        for (const auto& channel : gltfAnimation.channels) {
-            const tinygltf::AnimationSampler& sampler = gltfAnimation.samplers[channel.sampler];
+        for (const auto &channel : gltfAnimation.channels) {
+            const tinygltf::AnimationSampler &sampler = gltfAnimation.samplers[channel.sampler];
 
             // Get interpolation method
             std::string interpolation = sampler.interpolation.empty() ? "LINEAR" : sampler.interpolation;
@@ -162,10 +159,10 @@ void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, s
             // Load keyframe times
             std::vector<float> times;
             {
-                const tinygltf::Accessor& accessor = model.accessors[sampler.input];
-                const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-                const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const unsigned char* dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+                const tinygltf::Accessor &accessor = model.accessors[sampler.input];
+                const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+                const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+                const unsigned char *dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
                 size_t count = accessor.count;
                 times.resize(count);
                 memcpy(times.data(), dataPtr, sizeof(float) * count);
@@ -174,10 +171,10 @@ void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, s
             // Load keyframe values
             std::vector<float> values;
             {
-                const tinygltf::Accessor& accessor = model.accessors[sampler.output];
-                const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-                const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                const unsigned char* dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+                const tinygltf::Accessor &accessor = model.accessors[sampler.output];
+                const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+                const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+                const unsigned char *dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
                 size_t count = accessor.count * tinygltf::GetNumComponentsInType(accessor.type);
                 values.resize(count);
                 memcpy(values.data(), dataPtr, sizeof(float) * count);
@@ -201,11 +198,7 @@ void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, s
             // Create keyframes
             size_t numKeyframes = times.size();
             size_t valueComponents = 0;
-            if (channel.target_path == "translation" || channel.target_path == "scale") {
-                valueComponents = 3;
-            } else if (channel.target_path == "rotation") {
-                valueComponents = 4;
-            } else {
+            if (channel.target_path == "translation" || channel.target_path == "scale") { valueComponents = 3; } else if (channel.target_path == "rotation") { valueComponents = 4; } else {
                 continue; // Unsupported path
             }
 
@@ -217,9 +210,7 @@ void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, s
             for (size_t i = 0; i < numKeyframes; ++i) {
                 KeyFrame keyframe;
                 keyframe.time = times[i];
-                if (keyframe.time > animation.duration) {
-                    animation.duration = keyframe.time;
-                }
+                if (keyframe.time > animation.duration) { animation.duration = keyframe.time; }
 
                 size_t offset = i * stride;
 
@@ -244,13 +235,7 @@ void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, s
                     }
                 } else {
                     // LINEAR or STEP interpolation
-                    if (channel.target_path == "translation") {
-                        keyframe.translation = glm::make_vec3(&values[offset]);
-                    } else if (channel.target_path == "rotation") {
-                        keyframe.rotation = glm::make_quat(&values[offset]);
-                    } else if (channel.target_path == "scale") {
-                        keyframe.scale = glm::make_vec3(&values[offset]);
-                    }
+                    if (channel.target_path == "translation") { keyframe.translation = glm::make_vec3(&values[offset]); } else if (channel.target_path == "rotation") { keyframe.rotation = glm::make_quat(&values[offset]); } else if (channel.target_path == "scale") { keyframe.scale = glm::make_vec3(&values[offset]); }
                 }
 
                 animChannel.keyframes.push_back(keyframe);
@@ -264,59 +249,29 @@ void extractAnimations(const tinygltf::Model& model, const Skeleton& skeleton, s
 }
 
 
-
-
-void updateSkeleton(const Animation& animation, float time, Skeleton& skeleton) {
-    for (const auto& channel : animation.channels) {
+void updateSkeleton(const Animation &animation, float time, Skeleton &skeleton) {
+    for (const auto &channel : animation.channels) {
         int boneIndex = channel.boneIndex;
-        Bone& bone = skeleton.bones[boneIndex];
+        Bone &bone = skeleton.bones[boneIndex];
 
-        const auto& keyframes = channel.keyframes;
+        const auto &keyframes = channel.keyframes;
         size_t numKeyframes = keyframes.size();
 
         // Handle time outside the animation duration
-        if (time < keyframes.front().time) {
-            time = keyframes.front().time;
-        } else if (time > keyframes.back().time) {
-            time = fmod(time, animation.duration);
-        }
+        if (time < keyframes.front().time) { time = keyframes.front().time; } else if (time > keyframes.back().time) { time = fmod(time, animation.duration); }
 
         // Find the current keyframe index
         size_t kfIndex = 0;
-        for (; kfIndex < numKeyframes - 1; ++kfIndex) {
-            if (time < keyframes[kfIndex + 1].time) {
-                break;
-            }
-        }
+        for (; kfIndex < numKeyframes - 1; ++kfIndex) { if (time < keyframes[kfIndex + 1].time) { break; } }
 
-        const KeyFrame& kf0 = keyframes[kfIndex];
-        const KeyFrame& kf1 = keyframes[std::min(kfIndex + 1, numKeyframes - 1)];
+        const KeyFrame &kf0 = keyframes[kfIndex];
+        const KeyFrame &kf1 = keyframes[std::min(kfIndex + 1, numKeyframes - 1)];
 
         float t = 0.0f;
-        if (kf0.time != kf1.time) {
-            t = (time - kf0.time) / (kf1.time - kf0.time);
-        }
+        if (kf0.time != kf1.time) { t = (time - kf0.time) / (kf1.time - kf0.time); }
 
         // Interpolation based on the method
-        if (channel.interpolation == "LINEAR") {
-            if (channel.path == "translation") {
-                bone.animTranslation = glm::mix(kf0.translation, kf1.translation, t);
-            } else if (channel.path == "rotation") {
-                bone.animRotation = glm::slerp(kf0.rotation, kf1.rotation, t);
-            } else if (channel.path == "scale") {
-                bone.animScale = glm::mix(kf0.scale, kf1.scale, t);
-            }
-        } else if (channel.interpolation == "STEP") {
-            if (channel.path == "translation") {
-                bone.animTranslation = kf0.translation;
-            } else if (channel.path == "rotation") {
-                bone.animRotation = kf0.rotation;
-            } else if (channel.path == "scale") {
-                bone.animScale = kf0.scale;
-            }
-        } else if (channel.interpolation == "CUBICSPLINE") {
-            std::cout<<"Cubic interpolation is not supported" << std::endl;
-        }
+        if (channel.interpolation == "LINEAR") { if (channel.path == "translation") { bone.animTranslation = glm::mix(kf0.translation, kf1.translation, t); } else if (channel.path == "rotation") { bone.animRotation = glm::slerp(kf0.rotation, kf1.rotation, t); } else if (channel.path == "scale") { bone.animScale = glm::mix(kf0.scale, kf1.scale, t); } } else if (channel.interpolation == "STEP") { if (channel.path == "translation") { bone.animTranslation = kf0.translation; } else if (channel.path == "rotation") { bone.animRotation = kf0.rotation; } else if (channel.path == "scale") { bone.animScale = kf0.scale; } } else if (channel.interpolation == "CUBICSPLINE") { std::cout << "Cubic interpolation is not supported" << std::endl; }
 
         // Update the bone's local transform
         bone.localTransform = glm::translate(glm::mat4(1.0f), bone.animTranslation) *
@@ -326,39 +281,30 @@ void updateSkeleton(const Animation& animation, float time, Skeleton& skeleton) 
 }
 
 
-
-
-
 // Helper functions to get node transformations
-glm::vec3 getNodeTranslation(const tinygltf::Node& node) {
-    if (!node.translation.empty()) {
-        return glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-    }
+glm::vec3 getNodeTranslation(const tinygltf::Node &node) {
+    if (!node.translation.empty()) { return glm::vec3(node.translation[0], node.translation[1], node.translation[2]); }
     return glm::vec3(0.0f);
 }
 
-glm::quat getNodeRotation(const tinygltf::Node& node) {
-    if (!node.rotation.empty()) {
-        return glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
-    }
+glm::quat getNodeRotation(const tinygltf::Node &node) {
+    if (!node.rotation.empty()) { return glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]); }
     return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 }
 
-glm::vec3 getNodeScale(const tinygltf::Node& node) {
-    if (!node.scale.empty()) {
-        return glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-    }
+glm::vec3 getNodeScale(const tinygltf::Node &node) {
+    if (!node.scale.empty()) { return glm::vec3(node.scale[0], node.scale[1], node.scale[2]); }
     return glm::vec3(1.0f);
 }
 
-glm::mat4 getNodeTransform(const tinygltf::Node& node) {
+glm::mat4 getNodeTransform(const tinygltf::Node &node) {
     glm::mat4 translation = glm::translate(glm::mat4(1.0f), getNodeTranslation(node));
     glm::mat4 rotation = glm::mat4_cast(getNodeRotation(node));
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), getNodeScale(node));
     return translation * rotation * scale;
 }
 
-bool loadGltfModel(const std::string& filepath, tinygltf::Model& model) {
+bool loadGltfModel(const std::string &filepath, tinygltf::Model &model) {
     tinygltf::TinyGLTF loader;
     std::string error, warning;
 
@@ -368,36 +314,34 @@ bool loadGltfModel(const std::string& filepath, tinygltf::Model& model) {
         return false;
     }
 
-    if (!warning.empty()) {
-        std::cerr << "glTF Warning: " << warning << std::endl;
-    }
+    if (!warning.empty()) { std::cerr << "glTF Warning: " << warning << std::endl; }
 
     return true;
 }
 
-bool arePositionsEqual(const Vec3f& posA, const Vec3f& posB, float epsilon = 1e-5f) {
+bool arePositionsEqual(const Vec3f &posA, const Vec3f &posB, float epsilon = 1e-5f) {
     // Use glm::distance or manual comparison with epsilon
     return glm::distance(posA, posB) < epsilon;
 }
 
-void updateNgonMeshWithBoneData(const tinygltf::Model& model, NGonDataWBones& ngonMesh) {
-    for (const auto& mesh : model.meshes) {
-        for (const auto& primitive : mesh.primitives) {
-            const auto& attributes = primitive.attributes;
+void updateNgonMeshWithBoneData(const tinygltf::Model &model, NGonDataWBones &ngonMesh) {
+    for (const auto &mesh : model.meshes) {
+        for (const auto &primitive : mesh.primitives) {
+            const auto &attributes = primitive.attributes;
 
             // Ensure JOINTS_0 and WEIGHTS_0 are present in the glTF model
             if (attributes.find("JOINTS_0") != attributes.end() && attributes.find("WEIGHTS_0") != attributes.end()) {
-                const tinygltf::Accessor& jointAccessor = model.accessors[attributes.at("JOINTS_0")];
-                const tinygltf::Accessor& weightAccessor = model.accessors[attributes.at("WEIGHTS_0")];
-                const tinygltf::Accessor& positionAccessor = model.accessors[attributes.at("POSITION")];
+                const tinygltf::Accessor &jointAccessor = model.accessors[attributes.at("JOINTS_0")];
+                const tinygltf::Accessor &weightAccessor = model.accessors[attributes.at("WEIGHTS_0")];
+                const tinygltf::Accessor &positionAccessor = model.accessors[attributes.at("POSITION")];
 
-                const tinygltf::BufferView& jointBufferView = model.bufferViews[jointAccessor.bufferView];
-                const tinygltf::BufferView& weightBufferView = model.bufferViews[weightAccessor.bufferView];
-                const tinygltf::BufferView& positionBufferView = model.bufferViews[positionAccessor.bufferView];
+                const tinygltf::BufferView &jointBufferView = model.bufferViews[jointAccessor.bufferView];
+                const tinygltf::BufferView &weightBufferView = model.bufferViews[weightAccessor.bufferView];
+                const tinygltf::BufferView &positionBufferView = model.bufferViews[positionAccessor.bufferView];
 
-                const uint8_t* jointData = reinterpret_cast<const uint8_t*>(&model.buffers[jointBufferView.buffer].data[jointAccessor.byteOffset + jointBufferView.byteOffset]);
-                const float* weightData = reinterpret_cast<const float*>(&model.buffers[weightBufferView.buffer].data[weightAccessor.byteOffset + weightBufferView.byteOffset]);
-                const float* positionData = reinterpret_cast<const float*>(&model.buffers[positionBufferView.buffer].data[positionAccessor.byteOffset + positionBufferView.byteOffset]);
+                const uint8_t *jointData = reinterpret_cast<const uint8_t *>(&model.buffers[jointBufferView.buffer].data[jointAccessor.byteOffset + jointBufferView.byteOffset]);
+                const float *weightData = reinterpret_cast<const float *>(&model.buffers[weightBufferView.buffer].data[weightAccessor.byteOffset + weightBufferView.byteOffset]);
+                const float *positionData = reinterpret_cast<const float *>(&model.buffers[positionBufferView.buffer].data[positionAccessor.byteOffset + positionBufferView.byteOffset]);
 
                 size_t vertexCount = positionAccessor.count;
 
@@ -408,7 +352,7 @@ void updateNgonMeshWithBoneData(const tinygltf::Model& model, NGonDataWBones& ng
 
                     // Now directly compare the position with the vertices in NgonMesh
                     for (size_t j = 0; j < ngonMesh.data.vertices.size(); ++j) {
-                        const Vec3f& ngonPosition = ngonMesh.data.vertices[j].position;
+                        const Vec3f &ngonPosition = ngonMesh.data.vertices[j].position;
 
                         // Directly compare vertex positions
                         if (arePositionsEqual(gltfPosition, ngonPosition)) {
@@ -435,11 +379,7 @@ void updateNgonMeshWithBoneData(const tinygltf::Model& model, NGonDataWBones& ng
                         }
                     }
                 }
-            } else {
-                std::cerr << "JOINTS_0 or WEIGHTS_0 not found in the glTF model." << std::endl;
-            }
+            } else { std::cerr << "JOINTS_0 or WEIGHTS_0 not found in the glTF model." << std::endl; }
         }
     }
 }
-
-

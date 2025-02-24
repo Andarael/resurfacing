@@ -36,8 +36,8 @@ using glm::mat2;
 using glm::mat3;
 using glm::mat4;
 
-#define VEC4F_ZERO Vec4f(0.0f, 0.0f, 0.0f, 0.0f)
-#define VEC3F_ZERO Vec3f(0.0f, 0.0f, 0.0f)
-#define VEC4F_ONE Vec4f(1.0f, 1.0f, 1.0f, 1.0f)
-#define VEC3F_ONE Vec3f(1.0f, 1.0f, 1.0f)
-#define MAT4F_ID Mat4f(1.0f)
+#define VEC4F_ZERO vec4(0.0f, 0.0f, 0.0f, 0.0f)
+#define VEC3F_ZERO vec3(0.0f, 0.0f, 0.0f)
+#define VEC4F_ONE vec4(1.0f, 1.0f, 1.0f, 1.0f)
+#define VEC3F_ONE vec3(1.0f, 1.0f, 1.0f)
+#define MAT4F_ID mat4(1.0f)
