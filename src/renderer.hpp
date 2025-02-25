@@ -16,6 +16,7 @@ public:
     renderer() = default;
     renderer(GLFWwindow *window, bool vSync);
     void init();
+    
 
 private:
     // Instance extension
@@ -59,6 +60,11 @@ private:
     bool m_vsync{false};
     uint32 m_frameIndex{0};
 
+    // RT
+    vk::Sampler m_linearSampler{};
+    SampledTexture m_colorTexture{};
+    SampledTexture m_depthTexture{};
+
 private:
     void createInstance();
     void createSurface();
@@ -71,4 +77,13 @@ private:
     void cleanupSwapChain();
     void createFrameData();
     void createDescriptorPool();
+    void initImGui();
+    void buildRenderTargets();
+
+
+    uint32 findMemoryType(uint32 p_typeFilter, vk::MemoryPropertyFlags p_properties) const;
+
+    Buffer createBufferInternal(const vk::BufferCreateInfo& p_createInfo);
+
+    Texture createTextureInternal(const vk::ImageCreateInfo& p_createInfo);
 };

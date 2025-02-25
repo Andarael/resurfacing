@@ -1,18 +1,49 @@
 ﻿#include "renderer.hpp"
 
-#include <set>
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include <vulkan/vulkan.hpp>
+#include <GLFW/glfw3.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+
+#include <set>
 
 #include "config.hpp"
-#include "GLFW/glfw3.h"
-
 
 renderer::renderer(GLFWwindow *window, bool vSync) {
     m_window = window;
     init();
 }
+
+uint32 renderer::findMemoryType(uint32 p_typeFilter, vk::MemoryPropertyFlags p_properties) const {
+    vk::PhysicalDeviceMemoryProperties memProperties;
+    m_device.getMemoryProperties(&memProperties);
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) { if ((p_typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & p_properties) == p_properties) { return i; } }
+    throw std::runtime_error("Failed to find suitable memory type.");
+}
+
+Buffer renderer::createBufferInternal(const vk::BufferCreateInfo &p_createInfo) {
+    Buffer res{};
+    VK_CHECK(m_logicalDevice.createBuffer(&p_createInfo, nullptr, &res.buffer));
+    vk::StructureChain<vk::MemoryRequirements2> memRequirements = m_logicalDevice.getBufferMemoryRequirements2(vk::BufferMemoryRequirementsInfo2(res.buffer));
+    vk::MemoryAllocateInfo allocInfo(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.size, findMemoryType(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
+    VK_CHECK(m_logicalDevice.allocateMemory(&allocInfo, nullptr, &res.memory));
+    m_logicalDevice.bindBufferMemory(res.buffer, res.memory, 0);
+    return res;
+}
+
+Texture renderer::createTextureInternal(const vk::ImageCreateInfo &p_createInfo) {
+    Texture res{};
+    VK_CHECK(m_logicalDevice.createImage(&p_createInfo, nullptr, &res.image));
+    vk::StructureChain<vk::MemoryRequirements2> memRequirements = m_logicalDevice.getImageMemoryRequirements2(vk::ImageMemoryRequirementsInfo2(res.image));
+    vk::MemoryAllocateInfo allocInfo(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.size, findMemoryType(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
+    VK_CHECK(m_logicalDevice.allocateMemory(&allocInfo, nullptr, &res.memory));
+    m_logicalDevice.bindImageMemory(res.image, res.memory, 0);
+    return res;
+}
+
 
 void renderer::init() {
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
@@ -21,10 +52,17 @@ void renderer::init() {
     selectPhysicalDevice();
     createDeviceAndQueues();
     createTransientCommandPool();
-    createSwapchain();
+    m_windowSize = createSwapchain();
     createFrameData();
     createDescriptorPool();
+    initImGui();
+    {
+        const vk::SamplerCreateInfo samplerCreateInfo = {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear};
+        VK_CHECK(m_logicalDevice.createSampler(&samplerCreateInfo, nullptr, &m_linearSampler));
+    }
+    buildRenderTargets();
 }
+
 
 void renderer::createInstance() {
     uint32 glfwExtensionCount = 0;
@@ -235,4 +273,65 @@ void renderer::createDescriptorPool() {
     const std::vector<vk::DescriptorPoolSize> poolSizes{{vk::DescriptorType::eCombinedImageSampler, 100}, {vk::DescriptorType::eUniformBuffer, 100}, {vk::DescriptorType::eStorageBuffer, 100}};
     const vk::DescriptorPoolCreateInfo poolInfo(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind | vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 1000, static_cast<uint32>(poolSizes.size()), poolSizes.data());
     VK_CHECK(m_logicalDevice.createDescriptorPool(&poolInfo, nullptr, &m_descriptorPool));
+}
+
+void renderer::initImGui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    vk::PipelineRenderingCreateInfo dynRenderingAttachamentInfo = {{}, 1, &m_imageFormat};
+    ImGui_ImplGlfw_InitForVulkan(m_window, true);
+    ImGui_ImplVulkan_InitInfo initInfo = {};
+    initInfo.Instance = m_instance;
+    initInfo.PhysicalDevice = m_device;
+    initInfo.Device = m_logicalDevice;
+    initInfo.QueueFamily = m_queueFamilyIndices.graphicsQueueIndex;
+    initInfo.Queue = m_graphicsQueue;
+    initInfo.PipelineCache = VK_NULL_HANDLE;
+    initInfo.DescriptorPool = m_descriptorPool;
+    initInfo.Allocator = nullptr;
+    initInfo.MinImageCount = 2;
+    initInfo.ImageCount = m_maxFramesInFlight;
+    initInfo.CheckVkResultFn = nullptr;
+    initInfo.UseDynamicRendering = true;
+    initInfo.PipelineRenderingCreateInfo = dynRenderingAttachamentInfo;
+    ImGui_ImplVulkan_Init(&initInfo);
+}
+
+void renderer::buildRenderTargets() {
+    const vk::ImageLayout layout = vk::ImageLayout::eGeneral;
+    {
+        const vk::Format format = vk::Format::eR8G8B8A8Unorm;
+        const vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
+        m_colorTexture = createTextureInternal({{}, vk::ImageType::e2D, format, {m_windowSize.width, m_windowSize.height, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, usage, vk::SharingMode::eExclusive, 0, nullptr, vk::ImageLayout::eUndefined});
+
+        vk::ImageViewCreateInfo viewCreateInfo = {{}, m_colorTexture.image, vk::ImageViewType::e2D, format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+        VK_CHECK(m_logicalDevice.createImageView(&viewCreateInfo, nullptr, &m_colorTexture.defaultView));
+        m_colorTexture.sampler = m_linearSampler;
+    }
+    {
+        const vk::Format format = findDepthFormat(m_device);
+        m_depthTexture = createTextureInternal({{}, vk::ImageType::e2D, format, {m_windowSize.width, m_windowSize.height, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, vk::SharingMode::eExclusive, 0, nullptr, vk::ImageLayout::eUndefined});
+
+        vk::ImageViewCreateInfo viewCreateInfo = {{}, m_depthTexture.image, vk::ImageViewType::e2D, format, {}, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}};
+        VK_CHECK(m_logicalDevice.createImageView(&viewCreateInfo, nullptr, &m_depthTexture.defaultView));
+    }
+
+    // transition layout and clear
+    vk::CommandBuffer transientCommandBuffer = beginSingleTimeCommands(m_logicalDevice, m_transientCommandPool);
+    cmdTransitionImageLayout(transientCommandBuffer, m_colorTexture.image, vk::ImageLayout::eUndefined, layout);
+    transientCommandBuffer.clearColorImage(m_colorTexture.image, layout, {0.f, 0.f, 0.f, 0.f}, {vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)});
+    // TODO: shoud we clear depth to ?
+    endSingleTimeCommands(transientCommandBuffer, m_logicalDevice, m_transientCommandPool, m_graphicsQueue);
+
+    /* TODO: Check again
+    // Descriptor Set for ImGUI
+    if((ImGui::GetCurrentContext() != nullptr) && ImGui::GetIO().BackendPlatformUserData != nullptr)
+    {
+      for(size_t d = 0; d < m_res.descriptor.size(); ++d)
+      {
+        m_descriptorSet[d] = ImGui_ImplVulkan_AddTexture(m_createInfo.linearSampler, m_res.uiImageViews[d], layout);
+      }
+    }*/
 }

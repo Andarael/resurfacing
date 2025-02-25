@@ -43,6 +43,8 @@ struct Texture {
 
 struct SampledTexture : public Texture {
     vk::Sampler sampler;
+    SampledTexture() = default;
+    SampledTexture(Texture t) : Texture(t) {}
 };
 
 struct Buffer {
@@ -157,7 +159,7 @@ static vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice, const s
 
         if (tiling == vk::ImageTiling::eLinear && (chain.get<vk::FormatProperties3>().linearTilingFeatures & features) == features)
             return format;
-        if (tiling == vk::ImageTiling::eLinear && (chain.get<vk::FormatProperties3>().linearTilingFeatures & features) == features)
+        if (tiling == vk::ImageTiling::eOptimal && (chain.get<vk::FormatProperties3>().optimalTilingFeatures & features) == features)
             return format;
     }
     ASSERT(false, "failed to find supported format!");
