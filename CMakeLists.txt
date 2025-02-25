@@ -13,6 +13,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
+set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 
 # ============================================================================
 # Libraries
@@ -59,3 +60,47 @@ add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${SOURCE_DIR} ${Vulkan_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME}  glfw glm imgui ${Vulkan_LIBRARIES} stb tinyGLTF)
+
+
+
+# ============================================================================
+# Shader Compilation
+# ============================================================================
+
+set(SHADER_EXTENSIONS vert tesc tese geom frag comp mesh task rgen rint rahit rchit rmiss rcall glsl)
+
+foreach(EXT ${SHADER_EXTENSIONS})
+    file(GLOB_RECURSE SHADERS "${SHADER_DIR}/*.${EXT}")
+    list(APPEND SHADER_FILES ${SHADERS})
+endforeach()
+
+file(MAKE_DIRECTORY ${SHADER_DIR}/_autogen)
+
+foreach(SHADER ${SHADER_FILES})
+file(RELATIVE_PATH SHADER_PATH ${SHADER_DIR} ${SHADER})
+get_filename_component(SHADER_FOLDER ${SHADER_PATH} DIRECTORY)
+if (SHADER_FOLDER)
+    source_group("Shaders/${SHADER_FOLDER}" FILES ${SHADER})
+else()
+    source_group("Shaders" FILES ${SHADER})
+endif()
+endforeach()
+
+add_custom_target(Shaders SOURCES ${SHADER_FILES})
+add_dependencies(${PROJECT_NAME} Shaders)
+
+# Compile shaders to SPIR-V
+foreach(SHADER ${SHADER_FILES})
+    get_filename_component(SHADER_NAME ${SHADER} NAME)
+    set(OUTPUT_FILE "${SHADER_DIR}/_autogen/${SHADER_NAME}.spv")
+    set(_COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} -V --target-env vulkan1.3 --P "#extension GL_GOOGLE_include_directive : require" -l --lto -o ${OUTPUT_FILE} ${SHADER})
+
+    add_custom_command(
+        PRE_BUILD
+        OUTPUT ${OUTPUT_FILE}
+        COMMAND ${_COMMAND}
+        MAIN_DEPENDENCY ${SHADER}
+        COMMENT "Compiling shader ${SHADER_NAME}"
+        VERBATIM
+    )
+endforeach()
