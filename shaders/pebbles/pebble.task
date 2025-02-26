@@ -1,0 +1,341 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_debug_printf : enable
+
+#define GROUP_SIZE 32
+
+#include "../common.glsl"
+#include "../noise.glsl"
+#include "pebble_helper.glsl"
+#include "../lods.glsl"
+
+layout(local_size_x = GROUP_SIZE) in;
+
+taskPayloadSharedEXT Task OUT;
+
+float computeApertureAngle(vec3 center, vec3 faceNormal, uint offset, uint numVertices) {
+    float maxCosine = -1.0;
+    for (uint i = 0; i < numVertices; i++) {
+        vec3 position = getVertexPosShared(offset + i) + pebbleUbo.extrusionAmount * faceNormal;
+        vec3 direction = normalize(position - center);
+        float cosine = dot(faceNormal, direction);
+        maxCosine = max(maxCosine, cosine);
+    }
+    float apertureAngle = acos(maxCosine);
+    return apertureAngle;
+}
+
+/*
+float computeNgonScreenSpaceAreaOld(uint offset, uint numVertices) {
+    vec4 transformedVertices[MAX_NGON_VERTICES];
+    for (uint i = 0; i < numVertices; i++) {
+        transformedVertices[i] = constants.MVP * vec4(vertices[indices[offset+i]].position.xyz, 1);
+        transformedVertices[i].xyz /= transformedVertices[i].w;
+    }
+
+    float sum1 = 0.0;
+    float sum2 = 0.0;
+
+    for (uint i = 0; i < numVertices - 1; i++) {
+        sum1 += transformedVertices[i].x * transformedVertices[i + 1].y;
+        sum2 += transformedVertices[i].y * transformedVertices[i + 1].x;
+    }
+
+    // Loop closure: connect last point to the first
+    sum1 += transformedVertices[numVertices - 1].x * transformedVertices[0].y;
+    sum2 += transformedVertices[numVertices - 1].y * transformedVertices[0].x;
+
+    float area = 0.5 * abs(sum1 - sum2);
+
+    return area * 1000;
+}
+
+float computeNgonScreenSpaceAreaAABB(uint offset, uint numVertices, vec4 faceNormal) {
+  // Initialize min and max values to large/small numbers for 3D AABB
+  vec3 minAABB = vec3(1e6);  // Start with very large values
+  vec3 maxAABB = vec3(-1e6); // Start with very small values
+
+  // Loop through each vertex in the N-gon to compute the AABB in 3D space
+  for (uint i = 0; i < numVertices; i++) {
+      vec4 vertexPos = vertices[indices[offset + i]].position + pebbleUbo.extrusionAmount * faceNormal;
+
+      // Update the 3D AABB min and max values
+      minAABB = min(minAABB, vertexPos.xyz);
+      maxAABB = max(maxAABB, vertexPos.xyz);
+  }
+
+  // Now we have the 3D AABB defined by minAABB and maxAABB
+  // We need to project all 8 corners of this AABB into NDC space and compute the min and max in screen space
+
+  vec2 minSS = vec2(1.0, 1.0);  // Start with the highest possible screen coordinates
+  vec2 maxSS = vec2(-1.0, -1.0); // Start with the lowest possible screen coordinates
+
+  // Compute the 8 corners of the AABB in 3D space
+  for (int i = 0; i < 8; i++) {
+      vec3 corner = vec3(
+          (i & 1) == 0 ? minAABB.x : maxAABB.x,
+          (i & 2) == 0 ? minAABB.y : maxAABB.y,
+          (i & 4) == 0 ? minAABB.z : maxAABB.z
+      );
+
+      // Project the corner to clip space using MVP matrix
+      vec4 clipPos = constants.MVP * vec4(corner, 1.0);
+      vec3 ndcPos = clipPos.xyz / clipPos.w;
+      vec2 screenPos = ndcPos.xy;
+
+      // Update screen space AABB min and max values
+      minSS = min(minSS, screenPos);
+      maxSS = max(maxSS, screenPos);
+  }
+
+  // Calculate the width and height of the bounding box in screen space
+  vec2 sizeSS = maxSS - minSS;
+
+  // Return the area of the AABB in screen space
+  return sizeSS.x * sizeSS.y; // Width * Height gives the area
+}
+
+float computeNgonScreenSpaceAreaExtrudedOOBB(uint offset, uint numVertices, vec4 faceNormal) {
+    /*
+    // Step 1: Use the vertices of the face to define a 2D basis in the plane
+
+    // take a vertice
+    // vector from vertice to next
+    // vector from vertice to previous
+
+    // Initialize min and max values to large/small numbers for 2D OOBB in the face's local plane
+    vec2 minOOBB = vec2(1e6);  // Start with very large values
+    vec2 maxOOBB = vec2(-1e6); // Start with very small values
+
+    // Step 2: Loop through each vertex in the N-gon to compute the 2D OOBB in the face's plane
+    for (uint i = 0; i < numVertices; i++) {
+        vec4 vertexPos = vertices[indices[offset + i]].position;
+
+        // Project vertex position onto the face's plane using the local basis defined by dir1 and dir2
+        vec3 localPos = vertexPos.xyz - origin; // Translate to the local origin
+        float x = dot(localPos, dir1);
+        float y = dot(localPos, dir2);
+        vec2 projectedPos = vec2(x, y);
+
+        // Update the 2D OOBB min and max values in the plane's local coordinates
+        minOOBB = min(minOOBB, projectedPos);
+        maxOOBB = max(maxOOBB, projectedPos);
+    }
+    // Step 3: Generate the 4 corners of the 2D OOBB in 3D space
+    vec3 oobbCorners[4];
+    oobbCorners[0] = origin + minOOBB.x * dir1 + minOOBB.y * dir2;
+    oobbCorners[1] = origin + maxOOBB.x * dir1 + minOOBB.y * dir2;
+    oobbCorners[2] = origin + maxOOBB.x * dir1 + maxOOBB.y * dir2;
+    oobbCorners[3] = origin + minOOBB.x * dir1 + maxOOBB.y * dir2;
+
+    // Step 4: Extrude the corners along the normal to form a 3D OOBB
+    vec3 extrudedCorners[8];
+    for (int i = 0; i < 4; i++) {
+        extrudedCorners[i] = oobbCorners[i]; // Bottom face
+        extrudedCorners[i + 4] = oobbCorners[i] + faceNormal.xyz; // Top face (extruded along the normal)
+    }
+
+    // Step 5: Project the 3D OOBB to NDC space using MVP matrix
+    vec2 minSS = vec2(1.0, 1.0);  // Start with the highest possible screen coordinates
+    vec2 maxSS = vec2(-1.0, -1.0); // Start with the lowest possible screen coordinates
+
+    for (int i = 0; i < 8; i++) {
+        vec4 clipPos = constants.MVP * vec4(extrudedCorners[i], 1.0);
+        vec3 ndcPos = clipPos.xyz / clipPos.w;
+        vec2 screenPos = ndcPos.xy;
+
+        // Update screen space AABB min and max values
+        minSS = min(minSS, screenPos);
+        maxSS = max(maxSS, screenPos);
+    }
+
+    // Step 6: Calculate the width and height of the bounding box in screen space
+    vec2 sizeSS = maxSS - minSS;
+    return sizeSS.x * sizeSS.y; // Width * Height gives the area
+    return 0.0;
+}
+
+float computeNgonScreenSpaceArea(uint offset, uint numVertices, vec4 faceNormal){
+  // Initialize min and max values to large/small numbers
+  vec2 minSS = vec2(1.0, 1.0);  // Start with the highest possible screen coordinates
+  vec2 maxSS = vec2(-1.0, -1.0); // Start with the lowest possible screen coordinates
+
+  // Loop through each vertex in the N-gon
+  for (uint i = 0; i < numVertices; i++) {
+      vec4 vertexPos = vertices[indices[offset + i]].position + pebbleUbo.extrusionAmount * faceNormal;
+      vec4 clipPos = constants.MVP * vertexPos;
+      vec3 ndcPos = clipPos.xyz / clipPos.w;
+      vec2 screenPos = ndcPos.xy;
+      minSS = min(minSS, screenPos);
+      maxSS = max(maxSS, screenPos);
+  }
+  vec2 sizeSS = maxSS.xy - minSS.xy; // (width, height) in normalized device coordinates (NDC)
+  return sizeSS.x * sizeSS.y; // Width * Height gives the area
+}
+*/
+
+uint computeSubdivLevel(vec3 center, vec3 faceNormal, uint offset, uint numVertices) {
+    if (!pebbleUbo.useLod)
+        return pebbleUbo.subdivisionLevel;
+    /*
+    // Screen-space LOD factor
+    float screenSpaceArea;
+    switch(pebbleUbo.BoundingBoxType) {
+        case 0:
+            screenSpaceArea = computeNgonScreenSpaceAreaOld(offset, numVertices);
+            break;
+        case 1:
+            screenSpaceArea = computeNgonScreenSpaceAreaAABB(offset, numVertices, faceNormal);
+            break;
+        case 2:
+            screenSpaceArea = computeNgonScreenSpaceAreaExtrudedOOBB(offset, numVertices, faceNormal);
+            break;
+        case 3:
+            screenSpaceArea = computeNgonScreenSpaceArea(offset, numVertices, faceNormal);
+            break;
+    }
+    float screenSpaceFactor = sqrt(screenSpaceArea);
+
+    float lodSubdivFactor = 0.125 * pebbleUbo.subdivisionLevel;
+    float viewAngle = dot(normalize(viewPos - center.xyz), faceNormal.xyz);
+
+    float value = 8;
+    value *= pebbleUbo.lodFactor;
+    value *= lodSubdivFactor;
+    value *= screenSpaceFactor;
+
+    value *= (1 - viewAngle / 4);
+
+    uint N = uint(value);
+
+    N = max(min(N, pebbleUbo.subdivisionLevel), 0);
+    N = max(min(N, MAX_SUBDIVISION_LEVEL), 0);
+
+    if (!pebbleUbo.allowLowLod)
+        N = max(N, 1);
+    */
+    return 0;
+}
+
+void pebbleBoundingBox(in out LodInfos lodInfos, uint numVertices) {
+    // Initialize min and max values to large/small numbers for 3D AABB
+    vec3 minAABB = vec3(1e6);  // Start with very large values
+    vec3 maxAABB = vec3(-1e6); // Start with very small values
+
+    // Loop through each vertex in the N-gon to compute the AABB in 3D space
+    vec3 vertexPos;
+    for (uint i = 0; i < numVertices; i++) {
+        vertexPos = getVertexPosShared(i);
+
+        minAABB = min(minAABB, vertexPos);
+        maxAABB = max(maxAABB, vertexPos);
+    }
+    // extrude the bounding box
+    maxAABB += pebbleUbo.extrusionAmount * pebbleUbo.extrusionVariation * lodInfos.normal;
+
+
+    lodInfos.minBound = minAABB;
+    lodInfos.maxBound = maxAABB;
+}
+
+uint computeSubdivLevel2(LodInfos lodInfos, uint numVertices) {
+    if (!pebbleUbo.useLod)
+        return pebbleUbo.subdivisionLevel;
+
+    uint N = pebbleUbo.subdivisionLevel;
+    float lodFactor = pebbleUbo.lodFactor;
+    pebbleBoundingBox(lodInfos, numVertices);
+    float screenSpaceSize = boundingBoxScreenSpaceSize(lodInfos);
+    uint targetLodN = uint(N * sqrt(screenSpaceSize * lodFactor));
+
+    return min(max(targetLodN, 0), N);
+}
+
+void main() {
+    fetchFaceData(groupId);
+
+    if (vertCount < 3) {
+        return;
+    }
+
+    // ==================== Patches Data ====================
+    vec3 center = getFaceCenter(groupId);
+    vec3 normal = getFaceNormal(groupId);
+
+    bool doRender = true;
+    if(pebbleUbo.useCulling) {
+        vec3 cameraPos = viewUbo.cameraPosition.xyz;
+        vec3 viewDir = -normalize(cameraPos - center);
+        doRender = dot(viewDir, normal) < pebbleUbo.cullingThreshold;
+        doRender = doRender && isVisible(center, viewUbo.projection * viewUbo.view * constants.model, 1.1); // frustum
+    }
+
+    if (!doRender) { // we need to extrude before culling so that the normal cone is correct
+        return;
+    }
+
+    
+
+    uint nbPatches = vertCount * 2 * 3; // each edge is divided into 2 regions, and there are three extrusions
+    uint nbWorkGroupsPerPatch = 1;
+
+    // Level of detail
+    LodInfos lodInfos;
+    lodInfos.MVP = viewUbo.projection * viewUbo.view * constants.model;
+    lodInfos.position = center;
+    lodInfos.normal = normal;
+    uint N = computeSubdivLevel2(lodInfos, vertCount);
+
+    uint taskcount = 1;
+    if (N > 0) {
+        if (N - 1 > MAX_SUBDIV_PER_WORKGROUP)
+            nbWorkGroupsPerPatch = uint(pow(4, N - 1 - MAX_SUBDIV_PER_WORKGROUP));
+        taskcount = nbPatches * nbWorkGroupsPerPatch + vertCount * 2;
+    }
+    OUT.baseID = groupId;
+    OUT.targetSubdivLevel = N;
+    seed = groupId;
+
+    float angle = pebbleUbo.time * pebbleUbo.rotationSpeed;
+    float cosTheta = cos(angle);
+    float sinTheta = sin(angle);
+    float oneMinusCosTheta = 1.0 - cosTheta;
+    vec3 axis = vec3(1, 0, 0);
+    mat3 rotation = mat3(
+        cosTheta + oneMinusCosTheta * axis.x * axis.x,
+        oneMinusCosTheta * axis.x * axis.y - sinTheta * axis.z,
+        oneMinusCosTheta * axis.x * axis.z + sinTheta * axis.y,
+
+        oneMinusCosTheta * axis.y * axis.x + sinTheta * axis.z,
+        cosTheta + oneMinusCosTheta * axis.y * axis.y,
+        oneMinusCosTheta * axis.y * axis.z - sinTheta * axis.x,
+
+        oneMinusCosTheta * axis.z * axis.x - sinTheta * axis.y,
+        oneMinusCosTheta * axis.z * axis.y + sinTheta * axis.x,
+        cosTheta + oneMinusCosTheta * axis.z * axis.z);
+
+    vec3 objectCenter = vec3(0, -5, 0);
+    vec3 desiredPos = center;
+
+    if (pebbleUbo.enableRotation) {
+        desiredPos -= objectCenter;
+        desiredPos = rotation * desiredPos;
+        desiredPos += objectCenter;
+    }
+
+    vec3 point = vec3(0, 0, 0);
+    OUT.scale = 1; //
+    float threshold = pebbleUbo.scalingThreshold;
+
+    if (pebbleUbo.enableRotation) {
+        float dist = length(desiredPos - point);
+
+        OUT.scale = clamp(threshold / abs(pow(dist,8)), 0.001, 1);
+    }
+
+    if (OUT.scale < threshold) {
+        taskcount = 0;
+    }
+
+    EmitMeshTasksEXT(taskcount, 1, 1);
+}

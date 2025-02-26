@@ -1,0 +1,81 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_scalar_block_layout : require
+
+#include "../shaderInterface.h"
+#include "../common.glsl"
+#include "../stdPerVertexMesh.glsl"
+
+
+
+layout(local_size_x = 1) in;
+layout(max_vertices = MAX_VERTS_HE, max_primitives = MAX_VERTS_HE + 2, triangles) out;
+
+
+// ==================== UNIFORMS ====================
+
+layout(std430, set = UBOSet, binding = U_configBinding) uniform HeUbo {
+    int nbFaces;
+    bool colorPerPrimitive;
+    float normalOffset;
+    bool doSkinning;
+}
+heUbo;
+
+void main() {
+
+    if (gl_WorkGroupID.x >= heUbo.nbFaces) {
+        return;
+    }
+
+    uint faceId = gl_WorkGroupID.x;
+    uint vertCount = getFaceVertCount(faceId);
+    uint offset = getFaceOffset(faceId);
+    vec3 faceNormal = getFaceNormal(faceId);
+    vec3 faceCenter = getFaceCenter(faceId);
+
+    SetMeshOutputsEXT(vertCount, vertCount - 2);
+
+    for (int i = 0; i < vertCount; i++) {
+        vec3 vertexPosition = getVertexPosRelative(faceId, i);
+        vec3 vertexNormal = getVertexNormalRelative(faceId, i);
+        if(heUbo.doSkinning) {
+            vec4 jointsIndice = jointsIndices[getVertexIDRelative(faceId, i)];
+            vec4 jointsWeight = jointsWeights[getVertexIDRelative(faceId, i)];
+            mat4 skinMat =
+                jointsWeight.x * boneMatrices[int(jointsIndice.x)] +
+                jointsWeight.y * boneMatrices[int(jointsIndice.y)] +
+                jointsWeight.z * boneMatrices[int(jointsIndice.z)] +
+                jointsWeight.w * boneMatrices[int(jointsIndice.w)];
+
+            vertexPosition = (skinMat * vec4(vertexPosition, 1.)).xyz;
+            vertexNormal = (skinMat * vec4(vertexNormal, 1.)).xyz;
+        }
+
+
+        vertexPosition -= vertexNormal * heUbo.normalOffset;
+
+        perVertex[i].worldPosU.xyz = vertexPosition;
+        perVertex[i].normalV.xyz = vertexNormal;
+
+        vec2 uv = getVertexTexCoordRelative(faceId, i);
+        perVertex[i].worldPosU.w = uv.x;
+        perVertex[i].normalV.w = uv.y;
+
+        gl_MeshVerticesEXT[i].gl_Position = viewUbo.projection * viewUbo.view * constants.model * vec4(vertexPosition, 1);
+    }
+
+    // output a triangle fan for the face
+    for (int i = 0; i < vertCount - 2; i++) {
+        gl_PrimitiveTriangleIndicesEXT[i] = uvec3(0, i + 1, i + 2);
+
+        uint perPrimColorIndex = faceId;
+        if (heUbo.colorPerPrimitive) {
+            perPrimColorIndex += i;
+        }
+
+        gl_MeshPrimitivesEXT[i].gl_PrimitiveID = int(perPrimColorIndex);
+
+        perPrimitive[i].data = uvec4(faceId, perPrimColorIndex, 0, 0);
+    }
+}

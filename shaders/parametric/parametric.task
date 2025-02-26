@@ -1,0 +1,112 @@
+#version 460
+
+#include "../shaderInterface.h"
+#include "parametric.glsl"
+
+layout(local_size_x = TASK_GROUP_SIZE) in;
+
+// returns the element type according to the texture
+uint getElementType(uint taskId) {
+    vec2 baseUV = getBaseUv(gl_WorkGroupID.x);
+    baseUV.y = 1.0 - baseUV.y;
+    vec3 textureColor = texture(sampler2D(textures[elementTextureID], samplers[nearestSamplerID]), baseUV).xyz;
+
+    // hard coded element mapping
+
+    uint ball = 1;
+    uint chain = 0;
+    uint spike = 6;
+    uint empty = -1;
+
+    // pure blue
+    if (textureColor.r <= 0.1 && textureColor.g <= 0.1 && textureColor.b >= 0.9) {
+        return spike;
+    }
+
+    // pure violet
+    if (textureColor.r >= 0.9 && textureColor.g <= 0.1 && textureColor.b >= 0.9) {
+        return ball;
+    }
+
+    // pure green
+    if (textureColor.r <= 0.1 && textureColor.g >= 0.9 && textureColor.b <= 0.1) {
+        return empty;
+    }
+
+    return resurfacingUbo.elementType;
+}
+
+void main() {
+    uint faceId = gl_WorkGroupID.x;
+    uint vertId = 0;
+
+    uint nbFaces = resurfacingUbo.nbFaces;
+    uint nbVertices = resurfacingUbo.nbVertices;
+
+    // all faces have already been processed by pervious tasks,
+    // now we process the vertices (This is part of mapping function F)
+    bool isVertex = (faceId >= nbFaces);
+    if (isVertex) {
+        vertId = faceId - nbFaces;
+        faceId = getFaceId(vertId);
+    }
+
+    uint doRender = resurfacingUbo.renderMesh ? 1 : 0;
+
+    vec3 instanceNormal = isVertex ? getVertexNormal(vertId) : getFaceNormal(faceId);
+    vec3 instancePosition = isVertex ? getVertexPosition(vertId) : getFaceCenter(faceId);
+    float faceArea = getFaceArea(faceId);
+
+    if (resurfacingUbo.doSkinning) {
+        vec4 jointsIndice = isVertex ? jointsIndices[vertId] : jointsIndices[getVertIdFace(faceId)];
+        vec4 jointsWeight = isVertex ? jointsWeights[vertId] : jointsWeights[getVertIdFace(faceId)];
+        mat4 skinMat =
+            jointsWeight.x * boneMatrices[int(jointsIndice.x)] +
+            jointsWeight.y * boneMatrices[int(jointsIndice.y)] +
+            jointsWeight.z * boneMatrices[int(jointsIndice.z)] +
+            jointsWeight.w * boneMatrices[int(jointsIndice.w)];
+
+        instancePosition = (skinMat * vec4(instancePosition, 1.)).xyz;
+        instanceNormal = (skinMat * vec4(instanceNormal, 1.)).xyz;
+    }
+
+    // Culling
+    vec3 cameraPos = viewUbo.cameraPosition.xyz;
+    vec3 viewDir = -normalize(cameraPos - instancePosition);
+    if (doRender != 0 && resurfacingUbo.backFaceCulling && dot(viewDir, instanceNormal) > resurfacingUbo.cullingThreshold) { doRender = 0; }
+    if (doRender != 0 && resurfacingUbo.backFaceCulling && !isVisible(instancePosition, viewUbo.projection * viewUbo.view * constants.model, 1.1)) { doRender = 0; }
+
+    // Level of detail
+    LodInfos lodInfos;
+    lodInfos.MVP = viewUbo.projection * viewUbo.view * constants.model;
+    lodInfos.position = instancePosition;
+    lodInfos.normal = instanceNormal;
+    lodInfos.area = faceArea;
+    lodInfos.controlNormal = isVertex ? resurfacingUbo.normal2 : resurfacingUbo.normal1;
+
+    uint elementType = resurfacingUbo.elementType;
+    if (resurfacingUbo.hasElementTypeTexture) { elementType = getElementType(faceId); }
+    if (elementType < 0 || elementType > 10) { doRender = 0; }
+
+    uvec2 MN = getLodMN(lodInfos, elementType);
+    uvec2 deltaUV = getDeltaUV(MN);
+    uvec2 numMeshTasks = (MN + deltaUV - 1) / deltaUV; // amplification amount k
+
+    // Populate the payload
+    if (doRender > 0) {
+        taskPayload.taskId = gl_WorkGroupID.x;
+        taskPayload.position = instancePosition;
+        taskPayload.normal = instanceNormal;
+        taskPayload.area = faceArea;
+        taskPayload.isVertex = isVertex;
+        taskPayload.MN = MN;
+        taskPayload.deltaUV = deltaUV;
+        taskPayload.elementType = isVertex ? 1 : 0;
+        taskPayload.elementType = elementType;
+#ifdef DISPLAY_DEBUG_DATA
+        taskPayload.debug = vec4(getBaseUv(gl_WorkGroupID.x), 0, 0);
+#endif
+    }
+
+    EmitMeshTasksEXT(numMeshTasks.x * doRender, numMeshTasks.y * doRender, 1);
+}
