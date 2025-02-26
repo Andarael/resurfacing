@@ -76,7 +76,7 @@ endforeach()
 
 file(MAKE_DIRECTORY ${SHADER_DIR}/_autogen)
 
-file(GLOB_RECURSE HEADERS "${SHADER_DIR}/*.h" "${SHADER_DIR}/*.hpp")
+file(GLOB_RECURSE HEADERS "${SHADER_DIR}/*.h")
 list(APPEND HEADER_FILES ${HEADERS})
 set(ALL_SHADER_FILES ${SHADER_FILES} ${HEADER_FILES})
 
@@ -90,8 +90,7 @@ foreach(FILE ${ALL_SHADER_FILES})
     endif()
 endforeach()
 
-add_custom_target(Shaders SOURCES ${ALL_SHADER_FILES})
-add_dependencies(${PROJECT_NAME} Shaders)
+target_sources(${PROJECT_NAME} PRIVATE ${ALL_SHADER_FILES})
 
 # Compile shaders to SPIR-V
 foreach(SHADER ${SHADER_FILES})
