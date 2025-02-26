@@ -125,8 +125,8 @@ void parametricEgg(vec2 uv, out vec3 pos, out vec3 normal, float a, float b) {
 
 // ================== Parametric Primitive Size Functions =====================
 void parametricTorusScreenSpaceSize(in out LodInfos lodInfos, float R, float r) {
-    lodInfos.minBound = vec3(-(R + r),-(R + r),-r);
-    lodInfos.maxBound = vec3((R + r),(R + r),r);
+    lodInfos.minBound = vec3(-(R + r), -(R + r), -r);
+    lodInfos.maxBound = vec3((R + r), (R + r), r);
 }
 
 void parametricSphereScreenSpaceSize(in out LodInfos lodInfos, float radius) {
@@ -139,9 +139,9 @@ void parametricMobiusStripScreenSpaceSize(in out LodInfos lodInfos, float width)
     lodInfos.maxBound = vec3(width, width, width * 0.5);
 }
 
-void parametricKleinBottleScreenSpaceSize(in out LodInfos lodInfos, float a) { // pretty good 
-    lodInfos.minBound = vec3(-3.0 * a, -2.0 * a, -1.5*a);
-    lodInfos.maxBound = vec3(2.0 * a, 3.0 * a, 1.5*a);
+void parametricKleinBottleScreenSpaceSize(in out LodInfos lodInfos, float a) { // pretty good
+    lodInfos.minBound = vec3(-3.0 * a, -2.0 * a, -1.5 * a);
+    lodInfos.maxBound = vec3(2.0 * a, 3.0 * a, 1.5 * a);
 }
 
 void parametricHyperbolicParaboloidScreenSpaceSize(in out LodInfos lodInfos, float a, float b) {
@@ -151,12 +151,12 @@ void parametricHyperbolicParaboloidScreenSpaceSize(in out LodInfos lodInfos, flo
 
 void parametricHelicoidScreenSpaceSize(in out LodInfos lodInfos, float a, float b) {
     lodInfos.minBound = vec3(-a * 3.0 * PI, -a * 3.5 * PI, 0);
-    lodInfos.maxBound = vec3(a * 4.0 * PI, a * 2.5 * PI, 2.0*b);
+    lodInfos.maxBound = vec3(a * 4.0 * PI, a * 2.5 * PI, 2.0 * b);
 }
 
 void parametricConeScreenSpaceSize(in out LodInfos lodInfos, float height, float radius) {
     lodInfos.minBound = vec3(-radius, -radius, 0.0);
-    lodInfos.maxBound = vec3(radius, radius, height*8.0);
+    lodInfos.maxBound = vec3(radius, radius, height * 8.0);
 }
 
 void parametricCylinderScreenSpaceSize(in out LodInfos lodInfos, float height, float radius) {

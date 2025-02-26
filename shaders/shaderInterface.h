@@ -5,6 +5,7 @@
 #define HE_PIPELINE
 #define RESURFACING_PIPELINE
 #define PEBBLE_PIPELINE
+
 namespace shaderInterface {
 #else
 #extension GL_EXT_scalar_block_layout : require
@@ -165,7 +166,7 @@ layout(set = OtherSet, binding = T_texturesBinding) uniform texture2D textures[t
 // ============== UBOs ================
 #ifdef __cplusplus
 typedef bool uint32;
-using uint=uint32;
+using uint = uint32;
 #endif
 
 #ifndef __cplusplus
@@ -178,11 +179,11 @@ using uint=uint32;
 #define UBOName(NAME)
 #endif
 
-PushConstantStruct PushConstants{
+PushConstantStruct PushConstants {
     mat4 model;
 }UBOName(constants);
 
-UBOStruct(scalar, UBOSet, U_viewBinding) ViewUBO{
+UBOStruct(scalar, UBOSet, U_viewBinding) ViewUBO {
     mat4 view;
     mat4 projection;
     vec4 cameraPosition;
@@ -190,7 +191,7 @@ UBOStruct(scalar, UBOSet, U_viewBinding) ViewUBO{
     float far;
 }UBOName(viewUbo);
 
-UBOStruct(scalar, UBOSet, U_globalShadingBinding) GlobalShadingUBO{
+UBOStruct(scalar, UBOSet, U_globalShadingBinding) GlobalShadingUBO {
     bool filmic;
     vec3 lightPos;
     vec3 lightColor;
@@ -199,7 +200,7 @@ UBOStruct(scalar, UBOSet, U_globalShadingBinding) GlobalShadingUBO{
     bool shadingHack;
 }UBOName(globalShadingUbo);
 
-UBOStruct(scalar, UBOSet, U_shadingBinding) ShadingUBO{
+UBOStruct(scalar, UBOSet, U_shadingBinding) ShadingUBO {
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -216,7 +217,7 @@ UBOStruct(scalar, UBOSet, U_shadingBinding) ShadingUBO{
 }UBOName(shadingUbo);
 
 #ifdef HE_PIPELINE
-UBOStruct(scalar, UBOSet, U_configBinding) HeUBO{
+UBOStruct(scalar, UBOSet, U_configBinding) HeUBO {
     int nbFaces;
     bool colorPerPrimitive;
     float normalOffset;
@@ -225,7 +226,7 @@ UBOStruct(scalar, UBOSet, U_configBinding) HeUBO{
 #endif
 
 #ifdef RESURFACING_PIPELINE
-UBOStruct(scalar, UBOSet, U_configBinding) ResurfacingUBO{
+UBOStruct(scalar, UBOSet, U_configBinding) ResurfacingUBO {
     int nbFaces;
     int nbVertices;
     int elementType;

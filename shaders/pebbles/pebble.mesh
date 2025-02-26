@@ -8,9 +8,10 @@
 
 #include "pebble.glsl" // must be included before any other include
 
-#include "../shaderInterface.h"
 #include "../common.glsl"
+#include "../shaderInterface.h"
 #include "../stdPerVertexMesh.glsl"
+
 
 #include "../noise.glsl"
 
@@ -204,7 +205,6 @@ void emitSingleQuad(uint q, uvec4 indices) {
         primId = taskId + patchId + index;
     }
 
-
     gl_MeshPrimitivesEXT[index + 0].gl_PrimitiveID = int(primId);
     gl_MeshPrimitivesEXT[index + 1].gl_PrimitiveID = int(primId);
 
@@ -296,7 +296,6 @@ void main() {
             float minLevel = pebbleUbo.extrusionAmount * (1.0 - pebbleUbo.extrusionVariation);
             float maxLevel = pebbleUbo.extrusionAmount * (1.0 + pebbleUbo.extrusionVariation);
             float randomizedExtrusion = rand(minLevel, maxLevel);
-
 
             float roundness = mix(.95, .5, pebbleUbo.roundness);
             float extrusionAmount = randomizedExtrusion;

@@ -22,18 +22,17 @@ layout(location = 0) flat out perprimitiveEXT PerPrimitive perPrimitive[];
 layout(location = 1) out PerVertex perVertex[];
 #endif
 
-
 // functions
 #ifdef FRAGMENT_SHADER
-vec3 getWorldPos(){
+vec3 getWorldPos() {
     return perVertex.worldPosU.xyz;
 }
 
-vec3 getNormal(){
+vec3 getNormal() {
     return perVertex.normalV.xyz;
 }
 
-vec2 getLocalUV(){
+vec2 getLocalUV() {
     return vec2(perVertex.worldPosU.w, perVertex.normalV.w);
 }
 #endif

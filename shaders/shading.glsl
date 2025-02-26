@@ -42,7 +42,7 @@ vec3 shading(vec3 worldPos, vec3 normal, vec2 localUv, vec2 baseUV, bool allowAO
         if (textureColor.r < 0.99 || textureColor.g < 0.99 || textureColor.b < 0.99) {
             diffuse = vec3(1);
         }
-            surfaceColor = 0.2 + 0.8 * textureColor;
+        surfaceColor = 0.2 + 0.8 * textureColor;
     }
 
     if (shadingUbo.doAo) {

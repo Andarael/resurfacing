@@ -7,8 +7,9 @@
 #include "pebble.glsl" // must be included before any other include
 
 #include "../common.glsl"
-#include "../noise.glsl"
 #include "../lods.glsl"
+#include "../noise.glsl"
+
 
 layout(local_size_x = GROUP_SIZE) in;
 
@@ -234,7 +235,6 @@ void pebbleBoundingBox(in out LodInfos lodInfos, uint numVertices) {
     // extrude the bounding box
     maxAABB += pebbleUbo.extrusionAmount * pebbleUbo.extrusionVariation * lodInfos.normal;
 
-
     lodInfos.minBound = minAABB;
     lodInfos.maxBound = maxAABB;
 }
@@ -264,7 +264,7 @@ void main() {
     vec3 normal = getFaceNormal(groupId);
 
     bool doRender = true;
-    if(pebbleUbo.useCulling) {
+    if (pebbleUbo.useCulling) {
         vec3 cameraPos = viewUbo.cameraPosition.xyz;
         vec3 viewDir = -normalize(cameraPos - center);
         doRender = dot(viewDir, normal) < pebbleUbo.cullingThreshold;
@@ -274,8 +274,6 @@ void main() {
     if (!doRender) { // we need to extrude before culling so that the normal cone is correct
         return;
     }
-
-    
 
     uint nbPatches = vertCount * 2 * 3; // each edge is divided into 2 regions, and there are three extrusions
     uint nbWorkGroupsPerPatch = 1;
@@ -331,7 +329,7 @@ void main() {
     if (pebbleUbo.enableRotation) {
         float dist = length(desiredPos - point);
 
-        OUT.scale = clamp(threshold / abs(pow(dist,8)), 0.001, 1);
+        OUT.scale = clamp(threshold / abs(pow(dist, 8)), 0.001, 1);
     }
 
     if (OUT.scale < threshold) {

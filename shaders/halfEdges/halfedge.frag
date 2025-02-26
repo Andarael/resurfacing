@@ -2,10 +2,11 @@
 
 #define FRAGMENT_SHADER
 
-#include "../shaderInterface.h"
 #include "../common.glsl"
+#include "../shaderInterface.h"
 #include "../shading.glsl"
 #include "../stdPerVertexMesh.glsl"
+
 
 vec2 getBaseUv(uint faceId) {
     uint vertId = getVertIdFace(faceId);

@@ -7,15 +7,15 @@ float signNotZero(in float k) {
 }
 
 vec2 signNotZero(in vec2 v) {
-    return vec2( signNotZero(v.x), signNotZero(v.y) );
+    return vec2(signNotZero(v.x), signNotZero(v.y));
 }
 
 vec2 octEncode(vec3 normal) {
-    return normal.xy / (1.0 + normal.z);  // Map to a 2D plane
+    return normal.xy / (1.0 + normal.z); // Map to a 2D plane
 }
 
 vec3 octDecode(vec2 enc) {
-    float z = 1.0 - dot(enc, enc);  // Reconstruct z using the length of the xy projection
-    return normalize(vec3(enc.x, enc.y, z));  // Reconstruct the full 3D vector
+    float z = 1.0 - dot(enc, enc);           // Reconstruct z using the length of the xy projection
+    return normalize(vec3(enc.x, enc.y, z)); // Reconstruct the full 3D vector
 }
 #endif

@@ -11,9 +11,9 @@
 // ============== Includes ==============
 #define RESURFACING_PIPELINE // enable resurfacing config ubo
 #include "../shaderInterface.h"
+
 #include "../common.glsl"
 #include "parametricSurfaces.glsl"
-
 
 // ============== Constants ==============
 

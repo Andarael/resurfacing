@@ -18,23 +18,25 @@ layout(location = 0) in PerVertexData {
 }
 frag_in;
 
-layout(location = 8) in perprimitiveEXT PerPrimData{
+layout(location = 8) in perprimitiveEXT PerPrimData {
     vec4 color;
-}prim_in;
+}
+prim_in;
 
-layout(push_constant) uniform PushConstants{
+layout(push_constant) uniform PushConstants {
     mat4 MVP;
     vec4[3] ModelMatrix;
     vec4 cameraPos;
-} constants;
+}
+constants;
 
 void main() {
     vec3 color = IDtoColor(gl_PrimitiveID);
 
     // Assign the color to your output variable
-    outColor = vec4(color,1.0);
-    //outColor = vec4(gl_BaryCoordEXT, 1.0);
-    //outColor = prim_in.color;
-    //outColor = vec4(0.,0,1,1);
-    //outColor = frag_in.color;
+    outColor = vec4(color, 1.0);
+    // outColor = vec4(gl_BaryCoordEXT, 1.0);
+    // outColor = prim_in.color;
+    // outColor = vec4(0.,0,1,1);
+    // outColor = frag_in.color;
 }

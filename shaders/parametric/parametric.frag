@@ -5,8 +5,9 @@
 #include "parametric.glsl" // must be included before any other include
 
 #include "../shaderInterface.h"
-#include "../stdPerVertexMesh.glsl"
 #include "../shading.glsl"
+#include "../stdPerVertexMesh.glsl"
+
 
 void main() {
     vec3 worldPos = getWorldPos();
