@@ -43,7 +43,7 @@ Buffer renderer::createStagingBuffer(const void *p_data, uint32 p_size) {
     m_usedStagingBuffers.push_back(staging); // track the buffer
 
     // map the buffer and copy the data
-    void* mappedData;
+    void *mappedData;
     vk::MemoryMapInfo mappedInfo = {{}, staging.memory, 0, p_size};
     VK_CHECK(m_logicalDevice.mapMemory2(&mappedInfo, &mappedData));
     memcpy(mappedData, p_data, p_size);
@@ -53,8 +53,7 @@ Buffer renderer::createStagingBuffer(const void *p_data, uint32 p_size) {
 }
 
 void renderer::freeStagingBuffers() {
-    for(const Buffer &buffer : m_usedStagingBuffers)
-    {
+    for (const Buffer &buffer : m_usedStagingBuffers) {
         m_logicalDevice.destroy(buffer.buffer);
         m_logicalDevice.free(buffer.memory);
     }
@@ -226,9 +225,9 @@ vk::Extent2D renderer::createSwapchain() {
     uint32 preferredImageCount = std::max(3u, minImageCount);
     // Handle the maxImageCount case where 0 means "no upper limit"
     uint32 maxImageCount = (capabilities2.surfaceCapabilities.maxImageCount == 0)
-                                 ? preferredImageCount
-                                 : // No upper limit, use preferred
-                                 capabilities2.surfaceCapabilities.maxImageCount;
+                               ? preferredImageCount
+                               : // No upper limit, use preferred
+                               capabilities2.surfaceCapabilities.maxImageCount;
 
     // Clamp preferredImageCount to valid range [minImageCount, maxImageCount]
     m_maxFramesInFlight = std::clamp(preferredImageCount, minImageCount, maxImageCount);
@@ -375,14 +374,14 @@ void renderer::buildRenderTargets() {
     }*/
 }
 
-Pipeline renderer::createPipeline(const std::vector<std::string>& p_shaderPaths, const PipelineDesc &p_pipelineDesc) {
+Pipeline renderer::createPipeline(const std::vector<std::string> &p_shaderPaths, const PipelineDesc &p_pipelineDesc) {
     Pipeline pipeline;
     std::vector<vk::ShaderModule> shaderModules(p_shaderPaths.size());
     std::vector<vk::PipelineShaderStageCreateInfo> shaderStages(p_shaderPaths.size());
     uint32 i = 0;
-    for (const auto& shaderPath : p_shaderPaths) {
+    for (const auto &shaderPath : p_shaderPaths) {
         const std::vector<byte> code = readFile(shaderPath);
-        vk::ShaderModuleCreateInfo createInfo({}, code.size(), reinterpret_cast<const uint32*>(code.data()));
+        vk::ShaderModuleCreateInfo createInfo({}, code.size(), reinterpret_cast<const uint32 *>(code.data()));
         VK_CHECK(m_logicalDevice.createShaderModule(&createInfo, nullptr, &shaderModules[i]));
         shaderStages[i] = {{}, inferShaderStageFromExt(shaderPath), shaderModules[i], "main"};
     }
@@ -391,7 +390,7 @@ Pipeline renderer::createPipeline(const std::vector<std::string>& p_shaderPaths,
     const vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, descriptorSetLayouts.size(), descriptorSetLayouts.data(), 1, &pushConstantRange);
     VK_CHECK(m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &pipeline.layout));
 
-    const std::array<vk::Format , 1>  imageFormats = {{vk::Format::eR8G8B8A8Unorm}}; // same as render target
+    const std::array<vk::Format, 1> imageFormats = {{vk::Format::eR8G8B8A8Unorm}}; // same as render target
     const vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{{}, static_cast<uint32>(imageFormats.size()), imageFormats.data(), findDepthFormat(m_device)};
     const vk::PipelineDynamicStateCreateInfo dynamicStateCreateInfo = {{}, static_cast<uint32>(p_pipelineDesc.dynamicStates.size()), p_pipelineDesc.dynamicStates.data()};
     vk::GraphicsPipelineCreateInfo pipelineCreateInfo({}, shaderStages.size(), shaderStages.data(), &p_pipelineDesc.vertexInputStateCreateInfo, &p_pipelineDesc.inputAssemblyStateCreateInfo, nullptr, nullptr, &p_pipelineDesc.rasterizationStateCreateInfo, &p_pipelineDesc.multisampleStateCreateInfo, &p_pipelineDesc.depthStencilStateCreateInfo, &p_pipelineDesc.colorBlendStateCreateInfo, &dynamicStateCreateInfo, pipeline.layout);
@@ -401,4 +400,74 @@ Pipeline renderer::createPipeline(const std::vector<std::string>& p_shaderPaths,
     for (auto &shaderModule : shaderModules) { m_logicalDevice.destroyShaderModule(shaderModule); }
     for (auto &descriptorSetLayout : descriptorSetLayouts) { m_logicalDevice.destroyDescriptorSetLayout(descriptorSetLayout); }
     return pipeline;
+}
+
+vk::CommandBuffer renderer::beginRendering() {
+    if (m_needRebuild) { m_windowSize = recreateSwapChain(); }
+
+    FrameData &frameData = m_frameData[m_currentFrame];
+    vk::SemaphoreWaitInfo waitInfo = {{}, 1, &m_FrameTimelineSemaphore, &frameData.frameNumber};
+    VK_CHECK(m_logicalDevice.waitSemaphores(&waitInfo, std::numeric_limits<uint64>::max()));
+    m_logicalDevice.resetCommandPool(frameData.commandPool, {});
+
+    vk::CommandBuffer cmd = frameData.commandBuffer;
+    cmd.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit}); // for now we rerecord every time
+    // aquiring the next image
+    ASSERT(m_needRebuild == false, "Swapbuffer need to call recreateSwapChain()");
+    FrameResources &frameResources = m_frameResources[m_currentFrame];
+    vk::Result result = m_logicalDevice.acquireNextImageKHR(m_swapChain, std::numeric_limits<uint64>::max(), frameResources.imageAvailableSemaphore, nullptr, &m_nextImageIndex);
+    if (result == vk::Result::eErrorOutOfDateKHR) { m_needRebuild = true; } else { ASSERT(result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR, "Failed to aquire next SwapChain image"); }
+    return cmd;
+}
+
+void renderer::endRendering(vk::CommandBuffer p_cmd) {
+    p_cmd.end();
+    // prepare submit
+    std::vector<vk::SemaphoreSubmitInfo> waitSemaphoreSubmitInfos;
+    std::vector<vk::SemaphoreSubmitInfo> signalSemaphoreSubmitInfos;
+    waitSemaphoreSubmitInfos.push_back({m_frameResources[m_currentFrame].imageAvailableSemaphore, 0, vk::PipelineStageFlagBits2::eColorAttachmentOutput});
+    signalSemaphoreSubmitInfos.push_back({m_frameResources[m_currentFrame].renderFinishedSemaphore, 0, vk::PipelineStageFlagBits2::eColorAttachmentOutput});
+
+    FrameData& frameData = m_frameData[m_frameRingCurrent];
+    const uint64 signalValue = frameData.frameNumber + m_maxFramesInFlight;
+    frameData.frameNumber = signalValue;
+
+    signalSemaphoreSubmitInfos.push_back({m_FrameTimelineSemaphore, signalValue, vk::PipelineStageFlagBits2::eColorAttachmentOutput});
+
+    const std::array<vk::CommandBufferSubmitInfo, 1> cmdSubmitInfo = {{{p_cmd}}};
+    const std::array<vk::SubmitInfo2, 1> submitInfo = {vk::SubmitInfo2({}, waitSemaphoreSubmitInfos.size(), waitSemaphoreSubmitInfos.data(), cmdSubmitInfo.size(), cmdSubmitInfo.data(), signalSemaphoreSubmitInfos.size(), signalSemaphoreSubmitInfos.data())};
+
+    m_graphicsQueue.submit2(submitInfo, nullptr);
+    presentFrame();
+    
+    m_frameRingCurrent = (m_frameRingCurrent + 1) % m_maxFramesInFlight;
+}
+
+void renderer::presentFrame() {
+    FrameResources &frameResources = m_frameResources[m_currentFrame];
+    const vk::PresentInfoKHR presentInfo(1, &frameResources.renderFinishedSemaphore, 1, &m_swapChain, &m_nextImageIndex);
+    const vk::Result result = m_presentQueue.presentKHR(&presentInfo);
+    if(result == vk::Result::eErrorOutOfDateKHR)
+    {
+        m_needRebuild = true;
+    }
+    else
+    {
+        ASSERT(result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR, "Couldn't present swapchain image");
+    }
+
+    // Advance to the next frame in the swapchain
+    m_currentFrame = (m_currentFrame + 1) % m_maxFramesInFlight;
+}
+
+
+void renderer::renderUI(vk::CommandBuffer p_cmd) {
+    ImGui::Render(); // prepare draw data
+    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eAttachmentOptimal, {}, nullptr, {}, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore}}};
+    const vk::RenderingInfo renderingInfo = {{}, {{0, 0}, m_windowSize}, 1, {}, renderingAttachments.size(), renderingAttachments.data()};
+    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex].image, vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eColorAttachmentOptimal);
+    p_cmd.beginRendering(renderingInfo);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), p_cmd);
+    p_cmd.endRendering();
+    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex].image, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
 }

@@ -30,6 +30,10 @@ public:
     void init();
     void cleanup();
     Pipeline createPipeline(const std::vector<std::string>&p_shaderPaths, const PipelineDesc &p_pipelineDesc);
+    vk::CommandBuffer beginRendering();
+    void endRendering(vk::CommandBuffer p_cmd);
+    void presentFrame();
+    void renderUI(vk::CommandBuffer p_cmd);
 
     UniformBuffer createUniformBuffer(uint32 p_size);
     Buffer createStagingBuffer(const void* p_data, uint32 p_size);
