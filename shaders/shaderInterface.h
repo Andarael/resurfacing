@@ -1,7 +1,7 @@
 #ifndef SHADERINTERFACE_H
 #define SHADERINTERFACE_H
-#include "imgui.h"
 #ifdef __cplusplus
+#include "imgui.h"
 #include <vulkan/vulkan.hpp>
 #include "vkHelper.hpp"
 #include "renderer.hpp"

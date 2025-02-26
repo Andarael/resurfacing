@@ -74,8 +74,8 @@ void main() {
     // Culling
     vec3 cameraPos = viewUbo.cameraPosition.xyz;
     vec3 viewDir = -normalize(cameraPos - instancePosition);
-    if (doRender != 0 && resurfacingUbo.backFaceCulling && dot(viewDir, instanceNormal) > resurfacingUbo.cullingThreshold) { doRender = 0; }
-    if (doRender != 0 && resurfacingUbo.backFaceCulling && !isVisible(instancePosition, viewUbo.projection * viewUbo.view * constants.model, 1.1)) { doRender = 0; }
+    if (doRender != 0 && resurfacingUbo.backfaceCulling && dot(viewDir, instanceNormal) > resurfacingUbo.cullingThreshold) { doRender = 0; }
+    if (doRender != 0 && resurfacingUbo.backfaceCulling && !isVisible(instancePosition, viewUbo.projection * viewUbo.view * constants.model, 1.1)) { doRender = 0; }
 
     // Level of detail
     LodInfos lodInfos;
