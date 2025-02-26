@@ -73,6 +73,22 @@ struct FrameData {
     uint64 frameNumber;
 };
 
+struct PipelineDesc {
+    vk::PipelineMultisampleStateCreateInfo multisampleStateCreateInfo{{}, vk::SampleCountFlagBits::e1, VK_FALSE};
+    vk::PipelineRasterizationStateCreateInfo rasterizationStateCreateInfo{{}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eNone, vk::FrontFace::eCounterClockwise, VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f};
+    vk::PipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{{}, 0, nullptr, 0, nullptr};
+    vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo{{}, vk::PrimitiveTopology::eTriangleList, VK_FALSE};
+    vk::PipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{{}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE, VK_FALSE, {}, {}, 0.0f, 1.0f};
+    vk::PipelineColorBlendAttachmentState colorBlendAttachmentState{VK_FALSE, vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd , vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd, vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+    vk::PipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{{}, VK_FALSE, vk::LogicOp::eCopy, 1, &colorBlendAttachmentState, {0.0f, 0.0f, 0.0f, 0.0f}};
+    std::array<vk::DynamicState,2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+};
+
+struct Pipeline {
+    vk::PipelineLayout layout;
+    vk::Pipeline pipeline;
+};
+
 // Functions
 
 // This returns the pipeline and access flags for a given layout, use for changing the image layout
@@ -295,3 +311,57 @@ static vk::PresentModeKHR selectSwapPresentMode(const std::vector<vk::PresentMod
 
     return vk::PresentModeKHR::eFifo; // Only mode guaranteed to be available
 }
+
+// function to read file as binary blob
+static std::vector<byte> readFile(const std::string &filename) {
+    std::ifstream file(filename, std::ios::binary | std::ios::ate); // Open at end to get file size
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
+    
+    std::streamsize fileSize = file.tellg(); // Get size
+    file.seekg(0, std::ios::beg); // Move back to beginning
+    
+    std::vector<byte> buffer(fileSize);
+    if (!file.read(reinterpret_cast<char*>(buffer.data()), fileSize)) {
+        throw std::runtime_error("Failed to read file: " + filename);
+    }
+    return buffer;
+}
+
+static vk::ShaderStageFlagBits inferShaderStageFromExt(std::string filename) {
+    std::string ext = filename.substr(filename.find_last_of(".") + 1);
+    if (ext == "vert")
+        return vk::ShaderStageFlagBits::eVertex;
+    if (ext == "frag")
+        return vk::ShaderStageFlagBits::eFragment;
+    if (ext == "comp")
+        return vk::ShaderStageFlagBits::eCompute;
+    if (ext == "tesc")
+        return vk::ShaderStageFlagBits::eTessellationControl;
+    if (ext == "tese")
+        return vk::ShaderStageFlagBits::eTessellationEvaluation;
+    if (ext == "geom")
+        return vk::ShaderStageFlagBits::eGeometry;
+    if (ext == "mesg")
+        return vk::ShaderStageFlagBits::eMeshEXT;
+    if (ext == "task") 
+        return vk::ShaderStageFlagBits::eTaskEXT;
+    if (ext == "rgen") 
+        return vk::ShaderStageFlagBits::eRaygenKHR;
+    if (ext == "rint") 
+        return vk::ShaderStageFlagBits::eIntersectionKHR;
+    if (ext == "rahit") 
+        return vk::ShaderStageFlagBits::eAnyHitKHR;
+    if (ext == "rchit") 
+        return vk::ShaderStageFlagBits::eClosestHitKHR;
+    if (ext == "rmiss") 
+        return vk::ShaderStageFlagBits::eMissKHR;
+    if (ext == "rcall") 
+        return vk::ShaderStageFlagBits::eCallableKHR;
+    
+    ASSERT(false, "Unsupported shader stage");
+    return vk::ShaderStageFlagBits::eAll;
+}
+
+    

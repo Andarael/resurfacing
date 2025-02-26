@@ -1,5 +1,7 @@
 ﻿#include "renderer.hpp"
 
+#include "shaderInterface.h"
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include <vulkan/vulkan.hpp>
@@ -175,6 +177,7 @@ void renderer::createDeviceAndQueues() {
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features, vk::PhysicalDeviceVulkan12Features, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceMeshShaderFeaturesEXT> deviceFeaturesChain = {};
     m_device.getFeatures2(&deviceFeaturesChain.get());
+    ASSERT(deviceFeaturesChain.get<vk::PhysicalDeviceVulkan12Features>().scalarBlockLayout, "Scalar block layout required, update driver!");
     ASSERT(deviceFeaturesChain.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering, "Dynamic rendering required, update driver!");
     vk::PhysicalDeviceMeshShaderFeaturesEXT &meshShaderFeatures = deviceFeaturesChain.get<vk::PhysicalDeviceMeshShaderFeaturesEXT>();
     ASSERT(meshShaderFeatures.meshShader && meshShaderFeatures.taskShader, "Mesh shader required, update driver!");
@@ -360,4 +363,32 @@ void renderer::buildRenderTargets() {
         m_descriptorSet[d] = ImGui_ImplVulkan_AddTexture(m_createInfo.linearSampler, m_res.uiImageViews[d], layout);
       }
     }*/
+}
+
+Pipeline renderer::createPipeline(const std::vector<std::string>& p_shaderPaths, const PipelineDesc &p_pipelineDesc) {
+    Pipeline pipeline;
+    std::vector<vk::ShaderModule> shaderModules(p_shaderPaths.size());
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages(p_shaderPaths.size());
+    uint32 i = 0;
+    for (const auto& shaderPath : p_shaderPaths) {
+        const std::vector<byte> code = readFile(shaderPath);
+        vk::ShaderModuleCreateInfo createInfo({}, code.size(), reinterpret_cast<const uint32*>(code.data()));
+        VK_CHECK(m_logicalDevice.createShaderModule(&createInfo, nullptr, &shaderModules[i]));
+        shaderStages[i] = {{}, inferShaderStageFromExt(shaderPath), shaderModules[i], "main"};
+    }
+    const vk::PushConstantRange pushConstantRange = {vk::ShaderStageFlagBits::eAll, 0, sizeof(shaderInterface::PushConstants)};
+    const std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::UBOSet, m_logicalDevice), shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::HESet, m_logicalDevice), shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::OtherSet, m_logicalDevice)};
+    const vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, descriptorSetLayouts.size(), descriptorSetLayouts.data(), 1, &pushConstantRange);
+    VK_CHECK(m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &pipeline.layout));
+
+    const std::array<vk::Format , 1>  imageFormats = {{vk::Format::eR8G8B8A8Unorm}}; // same as render target
+    const vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{{}, static_cast<uint32>(imageFormats.size()), imageFormats.data(), findDepthFormat(m_device)};
+    const vk::PipelineDynamicStateCreateInfo dynamicStateCreateInfo = {{}, static_cast<uint32>(p_pipelineDesc.dynamicStates.size()), p_pipelineDesc.dynamicStates.data()};
+    vk::GraphicsPipelineCreateInfo pipelineCreateInfo({}, shaderStages.size(), shaderStages.data(), &p_pipelineDesc.vertexInputStateCreateInfo, &p_pipelineDesc.inputAssemblyStateCreateInfo, nullptr, nullptr, &p_pipelineDesc.rasterizationStateCreateInfo, &p_pipelineDesc.multisampleStateCreateInfo, &p_pipelineDesc.depthStencilStateCreateInfo, &p_pipelineDesc.colorBlendStateCreateInfo, &dynamicStateCreateInfo, pipeline.layout);
+    pipelineCreateInfo.setPNext(&pipelineRenderingCreateInfo);
+    VK_CHECK(m_logicalDevice.createGraphicsPipelines(nullptr, 1, &pipelineCreateInfo, nullptr, &pipeline.pipeline));
+
+    for (auto &shaderModule : shaderModules) { m_logicalDevice.destroyShaderModule(shaderModule); }
+    for (auto &descriptorSetLayout : descriptorSetLayouts) { m_logicalDevice.destroyDescriptorSetLayout(descriptorSetLayout); }
+    return pipeline;
 }

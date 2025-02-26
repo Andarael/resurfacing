@@ -30,6 +30,8 @@ public:
     renderer(GLFWwindow *window, bool vSync);
     void init();
     void cleanup();
+    Pipeline createPipeline(const std::vector<std::string>&p_shaderPaths, const PipelineDesc &p_pipelineDesc);
+
     Buffer createStagingBuffer(const void* p_data, uint32 p_size);
     void freeStagingBuffers();
 
