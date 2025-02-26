@@ -76,24 +76,34 @@ endforeach()
 
 file(MAKE_DIRECTORY ${SHADER_DIR}/_autogen)
 
-foreach(SHADER ${SHADER_FILES})
-file(RELATIVE_PATH SHADER_PATH ${SHADER_DIR} ${SHADER})
-get_filename_component(SHADER_FOLDER ${SHADER_PATH} DIRECTORY)
-if (SHADER_FOLDER)
-    source_group("Shaders/${SHADER_FOLDER}" FILES ${SHADER})
-else()
-    source_group("Shaders" FILES ${SHADER})
-endif()
+file(GLOB_RECURSE HEADERS "${SHADER_DIR}/*.h" "${SHADER_DIR}/*.hpp")
+list(APPEND HEADER_FILES ${HEADERS})
+set(ALL_SHADER_FILES ${SHADER_FILES} ${HEADER_FILES})
+
+foreach(FILE ${ALL_SHADER_FILES})
+    file(RELATIVE_PATH FILE_PATH ${SHADER_DIR} ${FILE})
+    get_filename_component(FILE_FOLDER ${FILE_PATH} DIRECTORY)
+    if (FILE_FOLDER)
+        source_group("Shaders/${FILE_FOLDER}" FILES ${FILE})
+    else()
+        source_group("Shaders" FILES ${FILE})
+    endif()
 endforeach()
 
-add_custom_target(Shaders SOURCES ${SHADER_FILES})
+add_custom_target(Shaders SOURCES ${ALL_SHADER_FILES})
 add_dependencies(${PROJECT_NAME} Shaders)
 
 # Compile shaders to SPIR-V
 foreach(SHADER ${SHADER_FILES})
     get_filename_component(SHADER_NAME ${SHADER} NAME)
+    get_filename_component(SHADER_EXT ${SHADER} EXT)
+
+    if (${SHADER_EXT} STREQUAL ".glsl")
+        continue()  # Skip compilation for .glsl files
+    endif()
+
     set(OUTPUT_FILE "${SHADER_DIR}/_autogen/${SHADER_NAME}.spv")
-    set(_COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} -V --target-env vulkan1.3 --P "#extension GL_GOOGLE_include_directive : require" -l --lto -o ${OUTPUT_FILE} ${SHADER})
+    set(_COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} -V --target-env vulkan1.3 --P "#extension GL_GOOGLE_include_directive : require" -l -o ${OUTPUT_FILE} ${SHADER})
 
     add_custom_command(
         PRE_BUILD
