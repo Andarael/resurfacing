@@ -1,26 +1,14 @@
 #version 460
-#extension GL_EXT_mesh_shader : require
-#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_mesh_shader: require
+#extension GL_EXT_scalar_block_layout: require
 
+#define HE_PIPELINE // enable hafledge config ubo
 #include "../shaderInterface.h"
 #include "../common.glsl"
 #include "../stdPerVertexMesh.glsl"
 
-
-
-layout(local_size_x = 1) in;
-layout(max_vertices = MAX_VERTS_HE, max_primitives = MAX_VERTS_HE + 2, triangles) out;
-
-
-// ==================== UNIFORMS ====================
-
-layout(std430, set = UBOSet, binding = U_configBinding) uniform HeUbo {
-    int nbFaces;
-    bool colorPerPrimitive;
-    float normalOffset;
-    bool doSkinning;
-}
-heUbo;
+layout (local_size_x = 1) in;
+layout (max_vertices = MAX_VERTS_HE, max_primitives = MAX_VERTS_HE + 2, triangles) out;
 
 void main() {
 
@@ -39,14 +27,14 @@ void main() {
     for (int i = 0; i < vertCount; i++) {
         vec3 vertexPosition = getVertexPosRelative(faceId, i);
         vec3 vertexNormal = getVertexNormalRelative(faceId, i);
-        if(heUbo.doSkinning) {
+        if (heUbo.doSkinning) {
             vec4 jointsIndice = jointsIndices[getVertexIDRelative(faceId, i)];
             vec4 jointsWeight = jointsWeights[getVertexIDRelative(faceId, i)];
             mat4 skinMat =
-                jointsWeight.x * boneMatrices[int(jointsIndice.x)] +
-                jointsWeight.y * boneMatrices[int(jointsIndice.y)] +
-                jointsWeight.z * boneMatrices[int(jointsIndice.z)] +
-                jointsWeight.w * boneMatrices[int(jointsIndice.w)];
+            jointsWeight.x * boneMatrices[int(jointsIndice.x)] +
+            jointsWeight.y * boneMatrices[int(jointsIndice.y)] +
+            jointsWeight.z * boneMatrices[int(jointsIndice.z)] +
+            jointsWeight.w * boneMatrices[int(jointsIndice.w)];
 
             vertexPosition = (skinMat * vec4(vertexPosition, 1.)).xyz;
             vertexNormal = (skinMat * vec4(vertexNormal, 1.)).xyz;

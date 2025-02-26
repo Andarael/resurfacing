@@ -2,6 +2,7 @@
 #define PEBBLE_HELPER_GLSL
 
 // ================== Constants =====================
+#define PEBBLE_PIPELINE // enable pebble config ubo
 #include "../shaderInterface.h"
 #include "../common.glsl"
 
@@ -26,38 +27,6 @@ struct Task {               // per workgroup output
     uint targetSubdivLevel; // target subdivision level
     float scale;            // random value
 };
-
-layout(set = UBOSet, binding = U_configBinding) uniform UniformBufferObject {
-    uint subdivisionLevel;
-    uint subdivOffset;
-    float extrusionAmount;
-    float extrusionVariation;
-    float roundness;
-    uint normalCalculationMethod;
-
-    float fillradius;
-    float ringoffset;
-
-    bool useLod;
-    float lodFactor;
-    bool allowLowLod;
-    uint BoundingBoxType;
-
-    bool useCulling;
-    float cullingThreshold;
-
-    float time;
-
-    bool enableRotation;
-    float rotationSpeed;
-    float scalingThreshold;
-
-    bool doNoise;
-    float noiseAmplitude;
-    float noiseFrequency;
-    float normalOffset;
-}
-pebbleUbo;
 
 shared uint[MAX_NGON_VERTICES] sharedVertIndices;
 shared uint vertCount;

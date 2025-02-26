@@ -9,7 +9,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
 // ============== Includes ==============
-
+#define RESURFACING_PIPELINE // enable resurfacing config ubo
 #include "../shaderInterface.h"
 #include "../common.glsl"
 #include "parametricSurfaces.glsl"
@@ -55,38 +55,6 @@ struct TaskPayload {
 #ifndef FRAGMENT_SHADER
 taskPayloadSharedEXT TaskPayload taskPayload;
 #endif
-// ================== Uniforms =====================
-
-layout(std430, set = UBOSet, binding = U_configBinding) uniform ResurfacingUbo {
-    int nbFaces;
-    int nbVertices;
-    int elementType;
-    float scaling;
-    bool backFaceCulling;
-    float cullingThreshold;
-    bool doLod;
-    float lodFactor;
-    bool renderMesh;
-    bool hasElementTypeTexture;
-
-    float minorRadius;
-    float majorRadius;
-    vec3 normal1;
-    vec3 normal2;
-    float normalPerturbation;
-    uvec2 MN;
-    uvec2 minResolution;
-    int edgeMode;
-    bool cyclicU;
-    bool cyclicV;
-    uint Nx;
-    uint Ny;
-    uint degree;
-    vec3 minLutExtent;
-    vec3 maxLutExtent;
-    bool doSkinning;
-}
-resurfacingUbo;
 
 // ================== Functions =====================
 

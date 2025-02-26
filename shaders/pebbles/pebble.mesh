@@ -6,11 +6,11 @@
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_EXT_debug_printf : enable
 
-#include "../shaderInterface.h"
+#include "pebble.glsl" // must be included before any other include
 
+#include "../shaderInterface.h"
 #include "../common.glsl"
 #include "../stdPerVertexMesh.glsl"
-#include "pebble_helper.glsl"
 
 #include "../noise.glsl"
 

@@ -1,6 +1,10 @@
 #ifndef SHADERINTERFACE_H
 #define SHADERINTERFACE_H
 #ifdef __cplusplus
+#include "defines.hpp"
+#define HE_PIPELINE
+#define RESURFACING_PIPELINE
+#define PEBBLE_PIPELINE
 namespace shaderInterface {
 #else
 #extension GL_EXT_scalar_block_layout : require
@@ -146,51 +150,6 @@ uint getVertexIDRelative(uint faceId, uint vertIndexRelative) {
     return getVertexFaceIndex(offset + vertIndexRelative);
 }
 
-
-// ============== Other Data ================
-
-layout(push_constant) uniform PushConstants {
-    mat4 model;
-}
-constants;
-
-layout(std430, set = UBOSet, binding = 0) uniform ViewUBO {
-    mat4 view;
-    mat4 projection;
-    vec4 cameraPosition;
-    float near;
-    float far;
-}
-viewUbo;
-
-layout(std430, set = UBOSet, binding = 2) uniform GlobalShadingUbo {
-    vec3 lightPos;
-    bool linkLight;
-    vec3 lightColor;
-    bool filmic;
-    vec3 viewPos;
-    bool shadingHack;
-}
-globalShadingUbo;
-
-layout(std430, set = UBOSet, binding = 1) uniform ShadingUbo {
-    vec3 ambient;
-    float shininess;
-    vec3 diffuse;
-    float specularStrength;
-    vec3 specular;
-    int colorMode;
-    bool showElementTexture;
-    bool doAo;
-    bool doShading;
-    bool displayNormals;
-    bool displayPrimId;
-    bool displayLocalUv;
-    bool displayGlobalUv;
-}
-shadingUbo;
-
-
 // ============== Other Data ================
 
 layout(std430, set = OtherSet, binding = B_lutVertexBufferBinding) readonly buffer lutVertexBuffer { vec4 lutVertex[]; };
@@ -201,11 +160,138 @@ layout(std430, set = OtherSet, binding = B_skinBoneMatricesBinding) readonly buf
 layout(set = OtherSet, binding = S_samplersBinding) uniform sampler samplers[samplerCount];
 layout(set = OtherSet, binding = T_texturesBinding) uniform texture2D textures[textureCount];
 
-
 #endif
 
+// ============== UBOs ================
+#ifdef __cplusplus
+typedef bool uint32;
+using uint=uint32;
+#endif
+
+#ifndef __cplusplus
+#define PushConstantStruct layout(push_constant) uniform
+#define UBOStruct(ALIGNEMENT, SET, BINDING) layout(ALIGNEMENT, set = SET, binding = BINDING) uniform
+#define UBOName(NAME) NAME
+#else
+#define PushConstantStruct struct
+#define UBOStruct(ALIGNEMENT, SET, BINDING) struct
+#define UBOName(NAME)
+#endif
+
+PushConstantStruct PushConstants{
+    mat4 model;
+}UBOName(constants);
+
+UBOStruct(scalar, UBOSet, U_viewBinding) ViewUBO{
+    mat4 view;
+    mat4 projection;
+    vec4 cameraPosition;
+    float near;
+    float far;
+}UBOName(viewUbo);
+
+UBOStruct(scalar, UBOSet, U_globalShadingBinding) GlobalShadingUBO{
+    bool filmic;
+    vec3 lightPos;
+    vec3 lightColor;
+    vec3 viewPos;
+    bool linkLight;
+    bool shadingHack;
+}UBOName(globalShadingUbo);
+
+UBOStruct(scalar, UBOSet, U_shadingBinding) ShadingUBO{
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+    float specularStrength;
+    bool doAo;
+    bool showElementTexture;
+    bool doShading;
+    bool displayNormals;
+    bool displayPrimId;
+    int colorMode;
+    bool displayLocalUv;
+    bool displayGlobalUv;
+}UBOName(shadingUbo);
+
+#ifdef HE_PIPELINE
+UBOStruct(scalar, UBOSet, U_configBinding) HeUBO{
+    int nbFaces;
+    bool colorPerPrimitive;
+    float normalOffset;
+    bool doSkinning;
+}UBOName(heUbo);
+#endif
+
+#ifdef RESURFACING_PIPELINE
+UBOStruct(scalar, UBOSet, U_configBinding) ResurfacingUBO{
+    int nbFaces;
+    int nbVertices;
+    int elementType;
+    float scaling;
+    bool backFaceCulling;
+    float cullingThreshold;
+    bool doLod;
+    float lodFactor;
+    bool renderMesh;
+    bool hasElementTypeTexture;
+
+    float minorRadius;
+    float majorRadius;
+    vec3 normal1;
+    vec3 normal2;
+    float normalPerturbation;
+    uvec2 MN;
+    uvec2 minResolution;
+    int edgeMode;
+    bool cyclicU;
+    bool cyclicV;
+    uint Nx;
+    uint Ny;
+    uint degree;
+    vec3 minLutExtent;
+    vec3 maxLutExtent;
+    bool doSkinning;
+}UBOName(resurfacingUbo);
+#endif
+
+#ifdef PEBBLE_PIPELINE
+UBOStruct(scalar, UBOSet, U_configBinding) PebbleUBO {
+    uint subdivisionLevel;
+    uint subdivOffset;
+    float extrusionAmount;
+    float extrusionVariation;
+    float roundness;
+    uint normalCalculationMethod;
+
+    float fillradius;
+    float ringoffset;
+
+    bool useLod;
+    float lodFactor;
+    bool allowLowLod;
+    uint BoundingBoxType;
+
+    bool useCulling;
+    float cullingThreshold;
+
+    float time;
+
+    bool enableRotation;
+    float rotationSpeed;
+    float scalingThreshold;
+
+    bool doNoise;
+    float noiseAmplitude;
+    float noiseFrequency;
+    float normalOffset;
+}UBOName(pebbleUbo);
+#endif
 
 #ifdef __cplusplus
 }
 #endif
+
+
 #endif

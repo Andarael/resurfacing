@@ -1,9 +1,10 @@
 #version 460
 
+#include "parametric.glsl" // must be included before any other include
+
 #include "../shaderInterface.h"
 #include "../stdPerVertexMesh.glsl"
 #include "../noise.glsl"
-#include "parametric.glsl"
 
 layout(local_size_x = MESH_GROUP_SIZE) in;
 layout(max_vertices = MAX_VERTICES, max_primitives = MAX_PRIMITIVES, triangles) out;

@@ -1,7 +1,8 @@
 #version 460
 
+#include "parametric.glsl" // must be included before any other include
+
 #include "../shaderInterface.h"
-#include "parametric.glsl"
 
 layout(local_size_x = TASK_GROUP_SIZE) in;
 

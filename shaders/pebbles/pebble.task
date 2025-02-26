@@ -4,9 +4,10 @@
 
 #define GROUP_SIZE 32
 
+#include "pebble.glsl" // must be included before any other include
+
 #include "../common.glsl"
 #include "../noise.glsl"
-#include "pebble_helper.glsl"
 #include "../lods.glsl"
 
 layout(local_size_x = GROUP_SIZE) in;
