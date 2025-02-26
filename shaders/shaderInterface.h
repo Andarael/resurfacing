@@ -1,6 +1,9 @@
 #ifndef SHADERINTERFACE_H
 #define SHADERINTERFACE_H
 #ifdef __cplusplus
+#include <vulkan/vulkan.hpp>
+#include "vkHelper.hpp"
+#include "renderer.hpp"
 #include "defines.hpp"
 #define HE_PIPELINE
 #define RESURFACING_PIPELINE
@@ -165,7 +168,6 @@ layout(set = OtherSet, binding = T_texturesBinding) uniform texture2D textures[t
 
 // ============== UBOs ================
 #ifdef __cplusplus
-typedef bool uint32;
 using uint = uint32;
 #endif
 
@@ -291,6 +293,72 @@ UBOStruct(scalar, UBOSet, U_configBinding) PebbleUBO {
 #endif
 
 #ifdef __cplusplus
+static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const vk::Device &p_logicalDevice) {
+    vk::DescriptorSetLayoutCreateInfo layoutInfo;
+    std::vector<vk::DescriptorSetLayoutBinding> bindings;
+    std::vector<vk::DescriptorBindingFlags> bindingFlags;
+    switch (p_set) {
+    case UBOSet: {
+        bindings = {
+            {U_viewBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {U_configBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {U_globalShadingBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {U_shadingBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+        };
+        bindingFlags = {
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+        };
+        break;
+    }
+
+    case HESet: {
+        bindings = {
+            {B_heVec4TypeBinding, vk::DescriptorType::eStorageBuffer, vec4DataCount, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_heVec2TypeBinding, vk::DescriptorType::eStorageBuffer, vec2DataCount, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_heIntTypeBinding, vk::DescriptorType::eStorageBuffer, intDataCount, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_heFloatTypeBinding, vk::DescriptorType::eStorageBuffer, floatDataCount, vk::ShaderStageFlagBits::eAllGraphics},
+        };
+        bindingFlags = {
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
+        };
+        break;
+    }
+    case OtherSet: {
+        bindings = {
+            {B_lutVertexBufferBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_skinJointsIndicesBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_skinJointsWeightsBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_skinBoneMatricesBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {S_samplersBinding, vk::DescriptorType::eSampler, samplerCount, vk::ShaderStageFlagBits::eAllGraphics},
+            {T_texturesBinding, vk::DescriptorType::eSampledImage, textureCount, vk::ShaderStageFlagBits::eAllGraphics},
+        };
+        bindingFlags = {
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
+        };
+    }
+    default: ASSERT(false, "Invalid set");
+    }
+    vk::DescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo;
+    bindingFlagsInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    bindingFlagsInfo.pBindingFlags = bindingFlags.data();
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+    layoutInfo.pNext = &bindingFlagsInfo;
+    vk::DescriptorSetLayout res{};
+    VK_CHECK(p_logicalDevice.createDescriptorSetLayout(&layoutInfo, nullptr, &res));
+    return res;
+}
 }
 #endif
 
