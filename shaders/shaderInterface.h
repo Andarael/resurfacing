@@ -5,6 +5,9 @@
 #include "vkHelper.hpp"
 #include "renderer.hpp"
 #include "defines.hpp"
+#undef near
+#undef far
+
 #define HE_PIPELINE
 #define RESURFACING_PIPELINE
 #define PEBBLE_PIPELINE
@@ -14,72 +17,77 @@ namespace shaderInterface {
 #extension GL_EXT_scalar_block_layout : require
 #endif
 
+#ifndef __cplusplus
+#define CONSTEXPR const
+#else
+#define CONSTEXPR constexpr
+#endif
 
-const int UBOSet = 0;
-const int HESet = 1;
-const int OtherSet = 2;
+CONSTEXPR int SceneSet = 0;
+CONSTEXPR int HESet = 1;
+CONSTEXPR int OtherSet = 2;
 
 // set 0 - UBOs
-const int U_viewBinding = 0;
-const int U_configBinding = 1;
-const int U_globalShadingBinding = 2;
-const int U_shadingBinding = 3;
+CONSTEXPR int U_viewBinding = 0;
+CONSTEXPR int U_globalShadingBinding = 1;
+CONSTEXPR int U_shadingBinding = 2;
 
 // set 1 - Half-Edge Data
-const int B_heVec4TypeBinding = 0;
-const int B_heVec2TypeBinding = 1;
-const int B_heIntTypeBinding = 2;
-const int B_heFloatTypeBinding = 3;
+CONSTEXPR int B_heVec4TypeBinding = 0;
+CONSTEXPR int B_heVec2TypeBinding = 1;
+CONSTEXPR int B_heIntTypeBinding = 2;
+CONSTEXPR int B_heFloatTypeBinding = 3;
 
 // set 2 - Other Data
-const int B_lutVertexBufferBinding = 0;
-const int B_skinJointsIndicesBinding = 1;
-const int B_skinJointsWeightsBinding = 2;
-const int B_skinBoneMatricesBinding = 3;
-const int S_samplersBinding = 4;
-const int T_texturesBinding = 5;
+CONSTEXPR int U_configBinding = 0;
+CONSTEXPR int B_lutVertexBufferBinding = 1;
+CONSTEXPR int B_skinJointsIndicesBinding = 2;
+CONSTEXPR int B_skinJointsWeightsBinding = 3;
+CONSTEXPR int B_skinBoneMatricesBinding = 4;
+CONSTEXPR int S_samplersBinding = 5;
+CONSTEXPR int T_texturesBinding = 6;
 
 
 // ============== Textures info ================
-const int linearSamplerID = 0;
-const int nearestSamplerID = 1;
-const int samplerCount = 2;
+CONSTEXPR int linearSamplerID = 0;
+CONSTEXPR int nearestSamplerID = 1;
+CONSTEXPR int samplerCount = 2;
 
-const int AOTextureID = 0;
-const int elementTextureID = 1;
-const int textureCount = 2;
+CONSTEXPR int AOTextureID = 0;
+CONSTEXPR int elementTextureID = 1;
+CONSTEXPR int textureCount = 2;
 
 
 // ============== Half-Edge Data ================
 
 // vec4 types data
-const int heVertexPositions = 0;
-const int heVertexColors = 1;
-const int heVertexNormals = 2;
-const int heFaceNormals = 3;
-const int heFaceCenters = 4;
-const int vec4DataCount = 5;
+CONSTEXPR int heVertexPositions = 0;
+CONSTEXPR int heVertexColors = 1;
+CONSTEXPR int heVertexNormals = 2;
+CONSTEXPR int heFaceNormals = 3;
+CONSTEXPR int heFaceCenters = 4;
+CONSTEXPR int vec4DataCount = 5;
 
 // vec2 types data
-const int heVertexTexCoords = 0;
-const int vec2DataCount = 1;
+CONSTEXPR int heVertexTexCoords = 0;
+CONSTEXPR int vec2DataCount = 1;
 
 // int types data
-const int heVertexEdges = 0;
-const int heFaceEdges = 1;
-const int heFaceVertCounts = 2;
-const int heFaceOffsets = 3;
-const int heHalfEdgeVertex = 4;
-const int heHalfEdgeFace = 5;
-const int heHalfEdgeNext = 6;
-const int heHalfEdgePrev = 7;
-const int heHalfEdgeTwin = 8;
-const int heVertexFaceIndex = 9;
-const int intDataCount = 10;
+CONSTEXPR int heVertexEdges = 0;
+CONSTEXPR int heFaceEdges = 1;
+CONSTEXPR int heFaceVertCounts = 2;
+CONSTEXPR int heFaceOffsets = 3;
+CONSTEXPR int heHalfEdgeVertex = 4;
+CONSTEXPR int heHalfEdgeFace = 5;
+CONSTEXPR int heHalfEdgeNext = 6;
+CONSTEXPR int heHalfEdgePrev = 7;
+CONSTEXPR int heHalfEdgeTwin = 8;
+CONSTEXPR int heVertexFaceIndex = 9;
+CONSTEXPR int intDataCount = 10;
 
 // float types data
-const int heFaceAreas = 0;
-const int floatDataCount = 1;
+CONSTEXPR int heFaceAreas = 0;
+CONSTEXPR int floatDataCount = 1;
 
 #ifndef __cplusplus
 #define lid gl_LocalInvocationID.x       // local thread ID
@@ -185,7 +193,7 @@ PushConstantStruct PushConstants {
     mat4 model;
 }UBOName(constants);
 
-UBOStruct(scalar, UBOSet, U_viewBinding) ViewUBO {
+UBOStruct(scalar, SceneSet, U_viewBinding) ViewUBO {
     mat4 view;
     mat4 projection;
     vec4 cameraPosition;
@@ -193,7 +201,7 @@ UBOStruct(scalar, UBOSet, U_viewBinding) ViewUBO {
     float far;
 }UBOName(viewUbo);
 
-UBOStruct(scalar, UBOSet, U_globalShadingBinding) GlobalShadingUBO {
+UBOStruct(scalar, SceneSet, U_globalShadingBinding) GlobalShadingUBO {
     bool filmic;
     vec3 lightPos;
     vec3 lightColor;
@@ -202,7 +210,7 @@ UBOStruct(scalar, UBOSet, U_globalShadingBinding) GlobalShadingUBO {
     bool shadingHack;
 }UBOName(globalShadingUbo);
 
-UBOStruct(scalar, UBOSet, U_shadingBinding) ShadingUBO {
+UBOStruct(scalar, SceneSet, U_shadingBinding) ShadingUBO {
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -219,7 +227,7 @@ UBOStruct(scalar, UBOSet, U_shadingBinding) ShadingUBO {
 }UBOName(shadingUbo);
 
 #ifdef HE_PIPELINE
-UBOStruct(scalar, UBOSet, U_configBinding) HeUBO {
+UBOStruct(scalar, OtherSet, U_configBinding) HeUBO {
     int nbFaces;
     bool colorPerPrimitive;
     float normalOffset;
@@ -228,7 +236,7 @@ UBOStruct(scalar, UBOSet, U_configBinding) HeUBO {
 #endif
 
 #ifdef RESURFACING_PIPELINE
-UBOStruct(scalar, UBOSet, U_configBinding) ResurfacingUBO {
+UBOStruct(scalar, OtherSet, U_configBinding) ResurfacingUBO {
     int nbFaces;
     int nbVertices;
     int elementType;
@@ -260,7 +268,7 @@ UBOStruct(scalar, UBOSet, U_configBinding) ResurfacingUBO {
 #endif
 
 #ifdef PEBBLE_PIPELINE
-UBOStruct(scalar, UBOSet, U_configBinding) PebbleUBO {
+UBOStruct(scalar, OtherSet, U_configBinding) PebbleUBO {
     uint subdivisionLevel;
     uint subdivOffset;
     float extrusionAmount;
@@ -298,15 +306,13 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
     std::vector<vk::DescriptorSetLayoutBinding> bindings;
     std::vector<vk::DescriptorBindingFlags> bindingFlags;
     switch (p_set) {
-    case UBOSet: {
+    case SceneSet: {
         bindings = {
             {U_viewBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {U_configBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
             {U_globalShadingBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
             {U_shadingBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
         };
         bindingFlags = {
-            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
@@ -331,6 +337,7 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
     }
     case OtherSet: {
         bindings = {
+            {U_configBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
             {B_lutVertexBufferBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
             {B_skinJointsIndicesBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
             {B_skinJointsWeightsBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
@@ -339,6 +346,7 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
             {T_texturesBinding, vk::DescriptorType::eSampledImage, textureCount, vk::ShaderStageFlagBits::eAllGraphics},
         };
         bindingFlags = {
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind| vk::DescriptorBindingFlagBits::ePartiallyBound},

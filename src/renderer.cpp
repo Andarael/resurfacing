@@ -387,7 +387,7 @@ Pipeline renderer::createPipeline(const std::vector<std::string>& p_shaderPaths,
         shaderStages[i] = {{}, inferShaderStageFromExt(shaderPath), shaderModules[i], "main"};
     }
     const vk::PushConstantRange pushConstantRange = {vk::ShaderStageFlagBits::eAll, 0, sizeof(shaderInterface::PushConstants)};
-    const std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::UBOSet, m_logicalDevice), shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::HESet, m_logicalDevice), shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::OtherSet, m_logicalDevice)};
+    const std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::SceneSet, m_logicalDevice), shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::HESet, m_logicalDevice), shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::OtherSet, m_logicalDevice)};
     const vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, descriptorSetLayouts.size(), descriptorSetLayouts.data(), 1, &pushConstantRange);
     VK_CHECK(m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &pipeline.layout));
 
