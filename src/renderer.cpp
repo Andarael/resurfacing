@@ -84,6 +84,8 @@ void renderer::init() {
     {
         vk::SamplerCreateInfo samplerCreateInfo = {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear};
         VK_CHECK(m_logicalDevice.createSampler(&samplerCreateInfo, nullptr, &m_linearSampler));
+        samplerCreateInfo = {{}, vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest};
+        VK_CHECK(m_logicalDevice.createSampler(&samplerCreateInfo, nullptr, &m_nearestSampler));
     }
     buildRenderTargets();
 }

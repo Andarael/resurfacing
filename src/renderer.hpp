@@ -11,7 +11,6 @@ struct GLFWwindow;
 
 class renderer {
 public:
-
     vk::Instance m_instance{};
     vk::DebugUtilsMessengerEXT m_callback{VK_NULL_HANDLE};
     vk::SurfaceKHR m_surface{};
@@ -22,6 +21,10 @@ public:
     vk::CommandPool m_transientCommandPool{}; // for short lived command buffers
     vk::SwapchainKHR m_swapChain;
     vk::DescriptorPool m_descriptorPool;
+
+    vk::Sampler m_linearSampler{};
+    vk::Sampler m_nearestSampler{};
+    
 public:
     renderer() = default;
     renderer(GLFWwindow *window, bool vSync);
@@ -29,6 +32,7 @@ public:
     void cleanup();
     Buffer createStagingBuffer(const void* p_data, uint32 p_size);
     void freeStagingBuffers();
+
     template <typename T>
     Buffer createAndUploadBuffer(vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, vk::BufferUsageFlags p_usage) {
         Buffer stagingBuffer = createStagingBuffer((void*)p_data.data(), p_data.size() * sizeof(T));
