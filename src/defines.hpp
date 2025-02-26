@@ -8,7 +8,7 @@ using nanosecondsD = std::chrono::duration<double, std::nano>;
 using microsecondsD = std::chrono::duration<double, std::micro>;
 using millisecondsD = std::chrono::duration<double, std::milli>;
 
-using std::byte;
+using byte = unsigned char;
 
 // Vectors
 using glm::vec2;
