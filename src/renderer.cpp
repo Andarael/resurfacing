@@ -61,6 +61,16 @@ void renderer::freeStagingBuffers() {
     m_usedStagingBuffers.clear();
 }
 
+UniformBuffer renderer::createUniformBuffer(uint32 p_size) {
+    UniformBuffer res;
+    vk::BufferCreateInfo bufferCreateInfo({}, p_size, vk::BufferUsageFlagBits::eUniformBuffer, vk::SharingMode::eExclusive);
+    UniformBuffer(createBufferInternal(bufferCreateInfo, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
+    // map the buffer
+    vk::MemoryMapInfo mappedInfo = {{}, res.memory, 0, p_size};
+    VK_CHECK(m_logicalDevice.mapMemory2(&mappedInfo, &res.mappedMemory));
+    return res;
+}
+
 Texture renderer::createTextureInternal(const vk::ImageCreateInfo &p_createInfo) {
     Texture res{};
     VK_CHECK(m_logicalDevice.createImage(&p_createInfo, nullptr, &res.image));

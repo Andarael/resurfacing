@@ -53,6 +53,12 @@ struct Buffer {
     vk::DeviceSize size = 0; // size in bytes
 };
 
+struct UniformBuffer : public Buffer {
+    void* mappedMemory = nullptr;
+    UniformBuffer() = default;
+    UniformBuffer(Buffer b) : Buffer(b) {} // should check if the buffer is a UBO
+};
+
 struct QueueFamilyIndices {
     uint32 presentQueueIndex = ~0U;
     uint32 graphicsQueueIndex = ~0U;

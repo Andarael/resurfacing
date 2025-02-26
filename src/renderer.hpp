@@ -8,7 +8,6 @@
 
 struct GLFWwindow;
 
-
 class renderer {
 public:
     vk::Instance m_instance{};
@@ -32,6 +31,7 @@ public:
     void cleanup();
     Pipeline createPipeline(const std::vector<std::string>&p_shaderPaths, const PipelineDesc &p_pipelineDesc);
 
+    UniformBuffer createUniformBuffer(uint32 p_size);
     Buffer createStagingBuffer(const void* p_data, uint32 p_size);
     void freeStagingBuffers();
 
@@ -43,7 +43,7 @@ public:
         p_commandBuffer.copyBuffer(stagingBuffer.buffer, buffer.buffer, copyRegion);
         return buffer;
     }
-    
+
 
 private:
     // Instance extension
