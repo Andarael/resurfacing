@@ -4,15 +4,19 @@
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE 
 #define TINYGLTF_NO_EXTERNAL_IMAGE 0
 // #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
-#include "tiny_gltf.h"
+#include <stb_image_write.h>
+
+
+#include <tiny_gltf.h>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <iostream>
 #include "defines.hpp"
 #include "ObjLoader.hpp"
-#include "glm/gtc/quaternion.hpp"
-#include "glm/gtc/type_ptr.hpp"
 
 
 // Data structures
@@ -319,12 +323,14 @@ bool loadGltfModel(const std::string &filepath, tinygltf::Model &model) {
     return true;
 }
 
-bool arePositionsEqual(const Vec3f &posA, const Vec3f &posB, float epsilon = 1e-5f) {
+bool arePositionsEqual(const vec3 &posA, const vec3 &posB, float epsilon = 1e-5f) {
     // Use glm::distance or manual comparison with epsilon
     return glm::distance(posA, posB) < epsilon;
 }
 
 void updateNgonMeshWithBoneData(const tinygltf::Model &model, NGonDataWBones &ngonMesh) {
+    ngonMesh.jointIndices.resize(ngonMesh.vertices.size());
+    ngonMesh.jointWeights.resize(ngonMesh.vertices.size());
     for (const auto &mesh : model.meshes) {
         for (const auto &primitive : mesh.primitives) {
             const auto &attributes = primitive.attributes;
@@ -348,17 +354,17 @@ void updateNgonMeshWithBoneData(const tinygltf::Model &model, NGonDataWBones &ng
                 // Iterate through each vertex in the glTF model
                 for (size_t i = 0; i < vertexCount; ++i) {
                     // Extract position from glTF
-                    Vec3f gltfPosition(positionData[i * 3 + 0], positionData[i * 3 + 1], positionData[i * 3 + 2]);
+                    vec3 gltfPosition(positionData[i * 3 + 0], positionData[i * 3 + 1], positionData[i * 3 + 2]);
 
                     // Now directly compare the position with the vertices in NgonMesh
-                    for (size_t j = 0; j < ngonMesh.data.vertices.size(); ++j) {
-                        const Vec3f &ngonPosition = ngonMesh.data.vertices[j].position;
+                    for (size_t j = 0; j < ngonMesh.vertices.size(); ++j) {
+                        const vec3 &ngonPosition = ngonMesh.vertices[j].position;
 
                         // Directly compare vertex positions
                         if (arePositionsEqual(gltfPosition, ngonPosition)) {
                             // If positions match, update the NgonMesh vertex with joint indices and weights
-                            Vec4f jointIndices;
-                            Vec4f jointWeights;
+                            vec4 jointIndices;
+                            vec4 jointWeights;
 
                             // Extract joint indices (4 per vertex, stored as unsigned bytes)
                             jointIndices.x = static_cast<float>(jointData[i * 4 + 0]);

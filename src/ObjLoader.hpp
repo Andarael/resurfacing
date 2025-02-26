@@ -35,10 +35,11 @@ struct NgonData {
     size_t getDataSize() const { return vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32) + faces.size() * sizeof(NGonFace); }
 };
 
-struct NGonDataWBones {
-    NgonData data;
+struct NGonDataWBones : public NgonData {
     std::vector<vec4> jointIndices;
     std::vector<vec4> jointWeights;
+    NGonDataWBones() = default;
+    NGonDataWBones(const NgonData &data) : NgonData(data) {}
 };
 
 static void extractIndices(const std::string &token, int &posIndex, int &texIndex, int &nIndex) {
