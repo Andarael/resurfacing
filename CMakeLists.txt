@@ -57,7 +57,7 @@ target_include_directories(tinyGLTF INTERFACE ${LIBS_DIR}/tinygltf)
 file(GLOB_RECURSE SOURCE_FILES ${SOURCE_DIR}/*.cpp ${SOURCE_DIR}/*.h ${SOURCE_DIR}/*.hpp)
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${SOURCE_DIR} ${Vulkan_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} PRIVATE ${SOURCE_DIR} ${SHADER_DIR} ${Vulkan_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME}  glfw glm imgui ${Vulkan_LIBRARIES} stb tinyGLTF)
 
