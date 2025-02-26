@@ -50,6 +50,7 @@ struct SampledTexture : public Texture {
 struct Buffer {
     vk::Buffer buffer;
     vk::DeviceMemory memory;
+    vk::DeviceSize size = 0; // size in bytes
 };
 
 struct QueueFamilyIndices {

@@ -12,10 +12,31 @@ struct GLFWwindow;
 class renderer {
 public:
 
+    vk::Instance m_instance{};
+    vk::DebugUtilsMessengerEXT m_callback{VK_NULL_HANDLE};
+    vk::SurfaceKHR m_surface{};
+    vk::PhysicalDevice m_device{};
+    vk::Device m_logicalDevice{};
+    vk::Queue m_graphicsQueue{};
+    vk::Queue m_presentQueue{};
+    vk::CommandPool m_transientCommandPool{}; // for short lived command buffers
+    vk::SwapchainKHR m_swapChain;
+    vk::DescriptorPool m_descriptorPool;
 public:
     renderer() = default;
     renderer(GLFWwindow *window, bool vSync);
     void init();
+    void cleanup();
+    Buffer createStagingBuffer(const void* p_data, uint32 p_size);
+    void freeStagingBuffers();
+    template <typename T>
+    Buffer createAndUploadBuffer(vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, vk::BufferUsageFlags p_usage) {
+        Buffer stagingBuffer = createStagingBuffer((void*)p_data.data(), p_data.size() * sizeof(T));
+        Buffer buffer = createBufferInternal({{}, p_data.size() * sizeof(T), p_usage | vk::BufferUsageFlagBits::eTransferDst});
+        vk::BufferCopy copyRegion(0, 0, p_data.size() * sizeof(T));
+        p_commandBuffer.copyBuffer(stagingBuffer.buffer, buffer.buffer, copyRegion);
+        return buffer;
+    }
     
 
 private:
@@ -28,16 +49,7 @@ private:
 
     GLFWwindow *m_window{};
 
-    vk::Instance m_instance{};
-    vk::DebugUtilsMessengerEXT m_callback{VK_NULL_HANDLE};
-    vk::SurfaceKHR m_surface{};
-    vk::PhysicalDevice m_device{};
-    vk::Device m_logicalDevice{};
-    vk::Queue m_graphicsQueue{};
-    vk::Queue m_presentQueue{};
-    vk::CommandPool m_transientCommandPool{}; // for short lived command buffers
-    vk::SwapchainKHR m_swapChain;
-    vk::DescriptorPool m_descriptorPool;
+    
 
     QueueFamilyIndices m_queueFamilyIndices{};
     vk::PhysicalDeviceLimits m_deviceLimits;
@@ -61,10 +73,11 @@ private:
     uint32 m_frameIndex{0};
 
     // RT
-    vk::Sampler m_linearSampler{};
+    
     SampledTexture m_colorTexture{};
     SampledTexture m_depthTexture{};
 
+    std::vector<Buffer> m_usedStagingBuffers{}; // for batching staging buffer freeing
 private:
     void createInstance();
     void createSurface();
@@ -83,7 +96,8 @@ private:
 
     uint32 findMemoryType(uint32 p_typeFilter, vk::MemoryPropertyFlags p_properties) const;
 
-    Buffer createBufferInternal(const vk::BufferCreateInfo& p_createInfo);
-
+    Buffer createBufferInternal(const vk::BufferCreateInfo& p_createInfo, const vk::MemoryPropertyFlags p_memProperties = vk::MemoryPropertyFlagBits::eDeviceLocal);
     Texture createTextureInternal(const vk::ImageCreateInfo& p_createInfo);
 };
+
+

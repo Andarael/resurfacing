@@ -20,18 +20,43 @@ renderer::renderer(GLFWwindow *window, bool vSync) {
 uint32 renderer::findMemoryType(uint32 p_typeFilter, vk::MemoryPropertyFlags p_properties) const {
     vk::PhysicalDeviceMemoryProperties memProperties;
     m_device.getMemoryProperties(&memProperties);
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) { if ((p_typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & p_properties) == p_properties) { return i; } }
+    for (uint32 i = 0; i < memProperties.memoryTypeCount; i++) { if ((p_typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & p_properties) == p_properties) { return i; } }
     throw std::runtime_error("Failed to find suitable memory type.");
 }
 
-Buffer renderer::createBufferInternal(const vk::BufferCreateInfo &p_createInfo) {
+Buffer renderer::createBufferInternal(const vk::BufferCreateInfo &p_createInfo, const vk::MemoryPropertyFlags p_memProperties) {
     Buffer res{};
+    res.size = p_createInfo.size;
     VK_CHECK(m_logicalDevice.createBuffer(&p_createInfo, nullptr, &res.buffer));
     vk::StructureChain<vk::MemoryRequirements2> memRequirements = m_logicalDevice.getBufferMemoryRequirements2(vk::BufferMemoryRequirementsInfo2(res.buffer));
-    vk::MemoryAllocateInfo allocInfo(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.size, findMemoryType(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
+    vk::MemoryAllocateInfo allocInfo(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.size, findMemoryType(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.memoryTypeBits, p_memProperties));
     VK_CHECK(m_logicalDevice.allocateMemory(&allocInfo, nullptr, &res.memory));
     m_logicalDevice.bindBufferMemory(res.buffer, res.memory, 0);
     return res;
+}
+
+Buffer renderer::createStagingBuffer(const void *p_data, uint32 p_size) {
+    vk::BufferCreateInfo bufferCreateInfo({}, p_size, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive);
+    Buffer staging = createBufferInternal(bufferCreateInfo, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    m_usedStagingBuffers.push_back(staging); // track the buffer
+
+    // map the buffer and copy the data
+    void* mappedData;
+    vk::MemoryMapInfo mappedInfo = {{}, staging.memory, 0, p_size};
+    VK_CHECK(m_logicalDevice.mapMemory2(&mappedInfo, &mappedData));
+    memcpy(mappedData, p_data, p_size);
+    vk::MemoryUnmapInfo unmapInfo = {{}, staging.memory};
+    VK_CHECK(m_logicalDevice.unmapMemory2(&unmapInfo));
+    return staging;
+}
+
+void renderer::freeStagingBuffers() {
+    for(const Buffer &buffer : m_usedStagingBuffers)
+    {
+        m_logicalDevice.destroy(buffer.buffer);
+        m_logicalDevice.free(buffer.memory);
+    }
+    m_usedStagingBuffers.clear();
 }
 
 Texture renderer::createTextureInternal(const vk::ImageCreateInfo &p_createInfo) {
@@ -57,12 +82,11 @@ void renderer::init() {
     createDescriptorPool();
     initImGui();
     {
-        const vk::SamplerCreateInfo samplerCreateInfo = {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear};
+        vk::SamplerCreateInfo samplerCreateInfo = {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear};
         VK_CHECK(m_logicalDevice.createSampler(&samplerCreateInfo, nullptr, &m_linearSampler));
     }
     buildRenderTargets();
 }
-
 
 void renderer::createInstance() {
     uint32 glfwExtensionCount = 0;
@@ -127,7 +151,7 @@ void renderer::selectPhysicalDevice() {
 void renderer::populateQueueFamilyIndices() {
     // find a graphics, compute and present queue (can be de same)
     std::vector<vk::QueueFamilyProperties2> queueFamilies = m_device.getQueueFamilyProperties2();
-    uint32_t i = 0;
+    uint32 i = 0;
     while (!m_queueFamilyIndices.isComplete() && i < queueFamilies.size()) {
         // very simple policy of selecting the first queue that supports the required operations, not ideal but works for now
         if (m_device.getSurfaceSupportKHR(i, m_surface)) { m_queueFamilyIndices.presentQueueIndex = i; }
@@ -183,10 +207,10 @@ vk::Extent2D renderer::createSwapchain() {
     const vk::PresentModeKHR presentMode = selectSwapPresentMode(presentModes, m_vsync);
 
     outWindowSize = capabilities2.surfaceCapabilities.currentExtent;
-    uint32_t minImageCount = capabilities2.surfaceCapabilities.minImageCount;
-    uint32_t preferredImageCount = std::max(3u, minImageCount);
+    uint32 minImageCount = capabilities2.surfaceCapabilities.minImageCount;
+    uint32 preferredImageCount = std::max(3u, minImageCount);
     // Handle the maxImageCount case where 0 means "no upper limit"
-    uint32_t maxImageCount = (capabilities2.surfaceCapabilities.maxImageCount == 0)
+    uint32 maxImageCount = (capabilities2.surfaceCapabilities.maxImageCount == 0)
                                  ? preferredImageCount
                                  : // No upper limit, use preferred
                                  capabilities2.surfaceCapabilities.maxImageCount;
@@ -270,7 +294,7 @@ void renderer::createFrameData() {
 }
 
 void renderer::createDescriptorPool() {
-    const std::vector<vk::DescriptorPoolSize> poolSizes{{vk::DescriptorType::eCombinedImageSampler, 100}, {vk::DescriptorType::eUniformBuffer, 100}, {vk::DescriptorType::eStorageBuffer, 100}};
+    const std::vector<vk::DescriptorPoolSize> poolSizes{{vk::DescriptorType::eSampler, 100}, {vk::DescriptorType::eSampledImage, 100}, {vk::DescriptorType::eUniformBuffer, 100}, {vk::DescriptorType::eStorageBuffer, 100}};
     const vk::DescriptorPoolCreateInfo poolInfo(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind | vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 1000, static_cast<uint32>(poolSizes.size()), poolSizes.data());
     VK_CHECK(m_logicalDevice.createDescriptorPool(&poolInfo, nullptr, &m_descriptorPool));
 }
