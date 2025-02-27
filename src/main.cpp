@@ -1,52 +1,190 @@
+#include "AppRessources.hpp"
 #include "config.hpp"
-#include "ObjLoader.hpp"
+#include "camera.hpp"
 #include "renderer.hpp"
 #include "GLFW/glfw3.h"
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
-void drawFrame(renderer&);
+void drawFrame(Renderer&);
+void run();
+void cleanup();
+
+class App {
+    GLFWwindow* m_window = nullptr;
+    Renderer m_renderer{};
+    Pipeline m_hePipeline{};
+    Pipeline m_parametricPipline{};
+
+    vk::DescriptorSetLayout m_uboDescriptorSetLayout;
+    vk::DescriptorSet m_uboDescriptorSet;
+    shaderInterface::PushConstants m_pushConstantData{};
+    shaderInterface::ViewUBO m_viewUBOData{};
+    shaderInterface::GlobalShadingUBO m_globalShadingUBOData{};
+    UniformBuffer m_viewUBO;
+    UniformBuffer m_globalShadingUBO;
+    
+    Dragon dragon{};
+
+    Camera m_camera;
+    bool m_animation;
+    float m_currentTime;
+    float m_timeScale = 1.0f;
+
+private:
+    void updateSceneUBOs();
+    void drawFrame();
+
+public:
+    void init();
+    void drawUI();
+    void handleEvent();
+    void animate(float p_dt);
+    void run();
+    void cleanup();
+};
 
 int main() {
     setWorkingDirectoryToProjectRoot();
     std::cout << "Working directory set to: " << std::filesystem::current_path() << std::endl;
-    NgonLoader loader;
-    NgonData data = loader.loadNgonData("assets/icosphere.obj");
+    App app;
+    app.init();
+    try {
+        app.run();
+    } catch (...) {
+        app.cleanup();
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
 
+void App::init() {
     ASSERT(glfwInit() == GLFW_TRUE, "Could not initialize GLFW!");
     ASSERT(glfwVulkanSupported() == GLFW_TRUE, "GLFW: Vulkan not supported!");
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow *window = glfwCreateWindow(800, 600, "Resurfacing", nullptr, nullptr);
-    renderer renderer(window, true);
+    m_window = glfwCreateWindow(800, 600, "Resurfacing", nullptr, nullptr);
+    m_renderer.init(m_window, false);
+
+
+    // allocate descriptor sets
+    m_uboDescriptorSetLayout = shaderInterface::getDescriptorSetLayoutInfo(shaderInterface::SceneSet, m_renderer.m_logicalDevice);
+    std::array<vk::DescriptorSetLayout, 1> layouts = {m_uboDescriptorSetLayout};
+    vk::DescriptorSetAllocateInfo allocInfo(m_renderer.m_descriptorPool, layouts.size(), layouts.data());
+    m_uboDescriptorSet = m_renderer.m_logicalDevice.allocateDescriptorSets(allocInfo)[0];
+    // allocate uniform buffers
+    m_viewUBO = m_renderer.createUniformBuffer(sizeof(shaderInterface::ViewUBO));
+    m_globalShadingUBO = m_renderer.createUniformBuffer(sizeof(shaderInterface::GlobalShadingUBO));
+    // update descriptor sets
+    vk::DescriptorBufferInfo globalShadingUBO = vk::DescriptorBufferInfo(m_globalShadingUBO.buffer, 0, VK_WHOLE_SIZE);
+    vk::DescriptorBufferInfo viewShadingUBO = vk::DescriptorBufferInfo(m_viewUBO.buffer, 0, VK_WHOLE_SIZE);
+    std::vector<vk::WriteDescriptorSet> UBOWrites = {
+        {m_uboDescriptorSet, shaderInterface::U_viewBinding, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &viewShadingUBO, nullptr},
+        {m_uboDescriptorSet, shaderInterface::U_globalShadingBinding, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &globalShadingUBO, nullptr}
+    };
+    m_renderer.m_logicalDevice.updateDescriptorSets(UBOWrites, nullptr);
+    memcpy(m_viewUBO.mappedMemory, &m_viewUBOData, sizeof(shaderInterface::ViewUBO));
+    memcpy(m_globalShadingUBO.mappedMemory, &m_globalShadingUBOData, sizeof(shaderInterface::GlobalShadingUBO));
+    m_camera.init(vec3(0, 3, 3), vec3(0));
     
-    while (!glfwWindowShouldClose(window)) {
+    
+    dragon.init(m_renderer, "assets/demo/dragon/dragon_8k.obj", "Dragon", "assets/demo/dragon/dragon_8k.gltf", "assets/parametric_luts/scale_lut.obj", "assets/demo/dragon/dargon_8k_ao.png", "assets/demo/dragon/dragon_element_type_map_2k.png");
+    m_hePipeline = m_renderer.createPipeline({"shaders/halfEdges/halfEdge.mesh","shaders/halfEdges/halfEdge.frag"}, PipelineDesc{});
+    m_parametricPipline = m_renderer.createPipeline({"shaders/parametric/parametric.task","shaders/parametric/parametric.mesh","shaders/parametric/parametric.frag"}, PipelineDesc{});
+}
+
+void App::drawUI() {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Exit"))
+                glfwSetWindowShouldClose(m_window, true);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+}
+
+void App::handleEvent() {
+    m_camera.handleEvents();
+}
+
+void App::animate(float p_deltaTime) {
+    m_currentTime += p_deltaTime * m_timeScale;
+    m_camera.animate(p_deltaTime);
+    m_globalShadingUBOData.viewPos = m_camera.getPosition();
+    if (m_globalShadingUBOData.linkLight) {
+        m_globalShadingUBOData.lightPos = m_camera.getPosition();
+    }
+
+    // update time
+    // Ground.animate(m_currentTime);
+    dragon.animate(m_currentTime, m_renderer);
+}
+
+void App::run() {
+    while (!glfwWindowShouldClose(m_window)) {
         glfwPollEvents();
-        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) == GLFW_TRUE) {
+        if (glfwGetWindowAttrib(m_window, GLFW_ICONIFIED) == GLFW_TRUE) {
             ImGui_ImplGlfw_Sleep(10); // Do nothing when minimized
             continue;
         }
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Exit"))
-                    glfwSetWindowShouldClose(window, true);
-                ImGui::EndMenu();
-            }
-            ImGui::EndMainMenuBar();
+        handleEvent();
+        float dt = ImGui::GetIO().DeltaTime;
+        if (m_animation) {
+            animate(dt);
         }
-        // ImGui::ShowDemoWindow();
-        drawFrame(renderer);
+        drawUI();
+        
+        
+        drawFrame();
         ImGui::EndFrame();
     }
-
-    return EXIT_SUCCESS;
+    cleanup();
 }
 
-void drawFrame(renderer &renderer) {
-    vk::CommandBuffer cmd = renderer.beginRendering();
-    renderer.renderUI(cmd);
-    renderer.endRendering(cmd);
+void App::updateSceneUBOs() {
+    mat4 projection = m_camera.getProjectionMatrix();
+    projection[1][1] *= -1; // flip y coordinate
+    m_viewUBOData.view = m_camera.getViewMatrix();
+    m_viewUBOData.projection = projection;
+    m_viewUBOData.cameraPosition = vec4(m_camera.getPosition(), 1);
+    m_viewUBOData.near = m_camera.getZNear();
+    m_viewUBOData.far = m_camera.getZFar();
+    memcpy(m_viewUBO.mappedMemory, &m_viewUBOData, sizeof(shaderInterface::ViewUBO));
+    memcpy(m_globalShadingUBO.mappedMemory, &m_globalShadingUBOData, sizeof(shaderInterface::GlobalShadingUBO));
+    dragon.updateUBOs();
+}
+
+void App::drawFrame() {
+    updateSceneUBOs();
+    
+    vk::CommandBuffer cmd = m_renderer.beginFrame();
+    m_renderer.beginRendering(cmd, true);
+    // dragon
+    cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, 800.0f, 600.0f, 0.0f, 1.0f));
+    cmd.setScissor(0, vk::Rect2D({0, 0}, {800, 600}));
+    cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_parametricPipline.pipeline);
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_parametricPipline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
+    dragon.bindAndDispatch(cmd, m_parametricPipline.layout);
+    cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_hePipeline.pipeline);
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_hePipeline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
+    dragon.bindAndDispatchBaseMesh(cmd, m_hePipeline.layout);
+    m_renderer.endRendering(cmd);
+
+
+    // UI pass
+    ImGui::Render(); // prepare draw data
+    m_renderer.beginRendering(cmd);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+    m_renderer.endRendering(cmd);
+    m_renderer.endFrame(cmd);
+}
+
+void App::cleanup() {
+    m_renderer.cleanup();
+    glfwDestroyWindow(m_window);
+    glfwTerminate();
 }
