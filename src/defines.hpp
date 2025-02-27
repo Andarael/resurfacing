@@ -1,4 +1,16 @@
 #pragma once
+#ifdef NDEBUG
+#define ASSERT(condition, message) \
+do                                 \
+{                                  \
+if(!(condition))                   \
+{                                  \
+throw std::runtime_error(message); \
+}                                  \
+} while(false)
+#else
+#define ASSERT(condition, message) assert((condition) && (message))
+#endif
 
 #include <glm/glm.hpp>
 #include <vector>

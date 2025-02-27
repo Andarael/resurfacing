@@ -1,17 +1,6 @@
 ﻿#pragma once
 #include "defines.hpp"
-#ifdef NDEBUG
-#define ASSERT(condition, message) \
-do                                 \
-{                                  \
-if(!(condition))                   \
-{                                  \
-throw std::runtime_error(message); \
-}                                  \
-} while(false)
-#else
-#define ASSERT(condition, message) assert((condition) && (message))
-#endif
+
 
 #include <vulkan/vk_enum_string_helper.h>
 #include <iostream>
@@ -36,6 +25,7 @@ struct Texture {
     vk::Image image;
     vk::DeviceMemory memory;
     vk::Format format;
+    vk::ImageLayout currentLayout = vk::ImageLayout::eUndefined;
     uvec3 dimensions = {0, 0, 0};
     vk::ImageView defaultView;
 
@@ -54,7 +44,7 @@ struct Buffer {
 };
 
 struct UniformBuffer : public Buffer {
-    void* mappedMemory = nullptr;
+    void *mappedMemory = nullptr;
     UniformBuffer() = default;
     UniformBuffer(Buffer b) : Buffer(b) {} // should check if the buffer is a UBO
 };
@@ -85,15 +75,17 @@ struct PipelineDesc {
     vk::PipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{{}, 0, nullptr, 0, nullptr};
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo{{}, vk::PrimitiveTopology::eTriangleList, VK_FALSE};
     vk::PipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{{}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE, VK_FALSE, {}, {}, 0.0f, 1.0f};
-    vk::PipelineColorBlendAttachmentState colorBlendAttachmentState{VK_FALSE, vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd , vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd, vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+    vk::PipelineColorBlendAttachmentState colorBlendAttachmentState{VK_FALSE, vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd, vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd, vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
     vk::PipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{{}, VK_FALSE, vk::LogicOp::eCopy, 1, &colorBlendAttachmentState, {0.0f, 0.0f, 0.0f, 0.0f}};
-    std::array<vk::DynamicState,2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+    std::array<vk::DynamicState, 2> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
 };
 
 struct Pipeline {
     vk::PipelineLayout layout;
     vk::Pipeline pipeline;
 };
+
+constexpr vk::ShaderStageFlags trueAllGraphics = vk::ShaderStageFlagBits::eAllGraphics | vk::ShaderStageFlagBits::eTaskEXT | vk::ShaderStageFlagBits::eMeshEXT;
 
 // Functions
 
@@ -136,7 +128,7 @@ static void endSingleTimeCommands(vk::CommandBuffer p_commandBuffer, vk::Device 
     VK_CHECK(p_logicalDevice.createFence(&fenceInfo, nullptr, fence.data()));
 
     const vk::CommandBufferSubmitInfo cmdBufferInfo{p_commandBuffer};
-    const std::array<vk::SubmitInfo2, 1> submitInfo{vk::SubmitInfo2{{}, 0, nullptr, 0, &cmdBufferInfo, 0, nullptr}};
+    const std::array<vk::SubmitInfo2, 1> submitInfo{vk::SubmitInfo2{{}, 0, nullptr, 1, &cmdBufferInfo, 0, nullptr}};
     VK_CHECK(p_queue.submit2(uint32(submitInfo.size()), submitInfo.data(), fence[0]));
     VK_CHECK(p_logicalDevice.waitForFences(uint32(fence.size()), fence.data(), true, UINT64_MAX));
 
@@ -155,10 +147,10 @@ static vk::ImageMemoryBarrier2 createImageMemoryBarrier(vk::Image image, vk::Ima
 }
 
 // Transition the image layout 
-static void cmdTransitionImageLayout(vk::CommandBuffer cmd, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
-                                     vk::ImageAspectFlags aspectMask = vk::ImageAspectFlagBits::eColor) {
-    const vk::ImageMemoryBarrier2 barrier = createImageMemoryBarrier(image, oldLayout, newLayout, {aspectMask, 0, 1, 0, 1});
-    cmd.pipelineBarrier2({{}, {}, {}, {}, {}, 1, &barrier});
+static void cmdTransitionImageLayout(vk::CommandBuffer p_cmd, Texture p_texture, vk::ImageLayout p_newLayout, vk::ImageAspectFlags p_aspectMask = vk::ImageAspectFlagBits::eColor) {
+    const vk::ImageMemoryBarrier2 barrier = createImageMemoryBarrier(p_texture.image, p_texture.currentLayout, p_newLayout, {p_aspectMask, 0, 1, 0, 1});
+    p_cmd.pipelineBarrier2({{}, {}, {}, {}, {}, 1, &barrier});
+    p_texture.currentLayout = p_newLayout; // not true as the command buffer is not executed yet but good enough for our use case
 }
 
 static vk::AccessFlags2 inferAccessMaskFromStage(vk::PipelineStageFlags2 stage, bool src) {
@@ -321,17 +313,13 @@ static vk::PresentModeKHR selectSwapPresentMode(const std::vector<vk::PresentMod
 // function to read file as binary blob
 static std::vector<byte> readFile(const std::string &filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate); // Open at end to get file size
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file: " + filename);
-    }
-    
+    if (!file.is_open()) { throw std::runtime_error("Failed to open file: " + filename); }
+
     std::streamsize fileSize = file.tellg(); // Get size
     file.seekg(0, std::ios::beg); // Move back to beginning
-    
+
     std::vector<byte> buffer(fileSize);
-    if (!file.read(reinterpret_cast<char*>(buffer.data()), fileSize)) {
-        throw std::runtime_error("Failed to read file: " + filename);
-    }
+    if (!file.read(reinterpret_cast<char *>(buffer.data()), fileSize)) { throw std::runtime_error("Failed to read file: " + filename); }
     return buffer;
 }
 
@@ -349,25 +337,23 @@ static vk::ShaderStageFlagBits inferShaderStageFromExt(std::string filename) {
         return vk::ShaderStageFlagBits::eTessellationEvaluation;
     if (ext == "geom")
         return vk::ShaderStageFlagBits::eGeometry;
-    if (ext == "mesg")
+    if (ext == "mesh")
         return vk::ShaderStageFlagBits::eMeshEXT;
-    if (ext == "task") 
+    if (ext == "task")
         return vk::ShaderStageFlagBits::eTaskEXT;
-    if (ext == "rgen") 
+    if (ext == "rgen")
         return vk::ShaderStageFlagBits::eRaygenKHR;
-    if (ext == "rint") 
+    if (ext == "rint")
         return vk::ShaderStageFlagBits::eIntersectionKHR;
-    if (ext == "rahit") 
+    if (ext == "rahit")
         return vk::ShaderStageFlagBits::eAnyHitKHR;
-    if (ext == "rchit") 
+    if (ext == "rchit")
         return vk::ShaderStageFlagBits::eClosestHitKHR;
-    if (ext == "rmiss") 
+    if (ext == "rmiss")
         return vk::ShaderStageFlagBits::eMissKHR;
-    if (ext == "rcall") 
+    if (ext == "rcall")
         return vk::ShaderStageFlagBits::eCallableKHR;
-    
+
     ASSERT(false, "Unsupported shader stage");
     return vk::ShaderStageFlagBits::eAll;
 }
-
-    
