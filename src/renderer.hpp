@@ -37,6 +37,7 @@ public:
 
     UniformBuffer createUniformBuffer(uint32 p_size);
     Buffer createStagingBuffer(uint32 p_size);
+    void freeTrackedStagingBuffers();
 
     template <typename T>
     Buffer createAndUploadBuffer(vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, vk::BufferUsageFlags p_usage) {
@@ -96,6 +97,8 @@ private:
     uint32 m_maxFramesInFlight;
     bool m_vsync{false};
     uint32 m_frameIndex{0};
+
+    std::vector<Buffer> m_usedStagingBuffers{}; // gather for later cleanup
 
 private:
     void createInstance();

@@ -27,6 +27,13 @@ Buffer Renderer::createStagingBuffer(uint32 p_size) {
     return staging;
 }
 
+void Renderer::freeTrackedStagingBuffers() {
+    for (Buffer &buffer : m_usedStagingBuffers) {
+        m_logicalDevice.destroyBuffer(buffer.buffer);
+        m_logicalDevice.freeMemory(buffer.memory);
+    }
+}
+
 UniformBuffer Renderer::createUniformBuffer(uint32 p_size) {
     vk::BufferCreateInfo bufferCreateInfo({}, p_size, vk::BufferUsageFlagBits::eUniformBuffer, vk::SharingMode::eExclusive);
     UniformBuffer res = UniformBuffer(createBufferInternal(bufferCreateInfo, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
@@ -63,11 +70,11 @@ void Renderer::copyToStagingMem(Buffer &p_staging, const void *p_data, uint32 p_
 
 void Renderer::uploadDataToBufferInternal(Buffer &p_dstBuffer, vk::CommandBuffer p_commandBuffer,const void *p_data, uint32 p_size, uint32 p_offset) {
     Buffer stagingBuffer = createStagingBuffer(p_size);
+    m_usedStagingBuffers.push_back(stagingBuffer);
     copyToStagingMem(stagingBuffer, p_data, p_size);
     vk::BufferCopy copyRegion(0, p_offset, p_size);
     p_commandBuffer.copyBuffer(stagingBuffer.buffer, p_dstBuffer.buffer, copyRegion);
-    m_logicalDevice.destroy(stagingBuffer.buffer);
-    m_logicalDevice.free(stagingBuffer.memory);
+
 }
 
 void Renderer::uploadDataToBufferInternal(Buffer &p_stagingBuffer, Buffer &p_dstBuffer, vk::CommandBuffer p_commandBuffer,const void *p_data, uint32 p_size, uint32 p_offset) {
@@ -78,14 +85,13 @@ void Renderer::uploadDataToBufferInternal(Buffer &p_stagingBuffer, Buffer &p_dst
 
 void Renderer::uploadDataToImageInternal(Texture &p_dstImage, vk::CommandBuffer p_commandBuffer,const void *p_data, uint32 p_size) {
     Buffer stagingBuffer = createStagingBuffer(p_size);
+    m_usedStagingBuffers.push_back(stagingBuffer);
     copyToStagingMem(stagingBuffer, p_data, p_size);
     vk::BufferImageCopy2 copyRegion(0, 0, 0, {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0, 0, 0}, {p_dstImage.dimensions.x, p_dstImage.dimensions.y, p_dstImage.dimensions.z});
     vk::ImageLayout oldLayout = p_dstImage.currentLayout;
     cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eTransferDstOptimal);
     p_commandBuffer.copyBufferToImage2({stagingBuffer.buffer, p_dstImage.image, vk::ImageLayout::eTransferDstOptimal, 1, &copyRegion});
     cmdTransitionImageLayout(p_commandBuffer, p_dstImage, oldLayout);   
-    m_logicalDevice.destroy(stagingBuffer.buffer);
-    m_logicalDevice.free(stagingBuffer.memory);
 }
 void Renderer::uploadDataToImageInternal(Buffer &p_stagingBuffer, Texture &p_dstImage, vk::CommandBuffer p_commandBuffer,const void *p_data, uint32 p_size) {
     copyToStagingMem(p_stagingBuffer, p_data, p_size);

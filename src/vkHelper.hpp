@@ -26,7 +26,7 @@ struct Texture {
     vk::DeviceMemory memory;
     vk::Format format;
     vk::ImageLayout currentLayout = vk::ImageLayout::eUndefined;
-    uvec3 dimensions = {0, 0, 0};
+    uvec3 dimensions = {1, 1, 1};
     vk::ImageView defaultView;
 
 };
