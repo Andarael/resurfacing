@@ -198,8 +198,6 @@ void Dragon::init(Renderer &renderer, const std::string &modelPath, const std::s
     heUBOData.nbFaces = heMesh.nbFaces;
     resurfacingUBOData.nbFaces = heMesh.nbFaces;
     resurfacingUBOData.nbVertices = heMesh.nbVertices;
-    heUBOData.doSkinning = false;
-    resurfacingUBOData.doSkinning = false;
     updateUBOs();
 }
 
@@ -221,6 +219,12 @@ void Dragon::updateUBOs() {
     memcpy(shadingUBO.mappedMemory, &m_shadingUBOData, sizeof(shaderInterface::ShadingUBO));
     memcpy(heUBO.mappedMemory, &heUBOData, sizeof(shaderInterface::HeUBO));
     memcpy(resurfacingUBO.mappedMemory, &resurfacingUBOData, sizeof(shaderInterface::ResurfacingUBO));
+}
+
+void Dragon::displayUI() {
+    heUBOData.displayUI(name);
+    resurfacingUBOData.displayUI(name);
+    m_shadingUBOData.displayUI(name);
 }
 
 void Dragon::animate(float currentTime, Renderer &renderer) {

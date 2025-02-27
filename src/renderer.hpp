@@ -30,6 +30,7 @@ public:
     void init(GLFWwindow *window, bool vSync);
     void cleanup();
     Pipeline createPipeline(const std::vector<std::string> &p_shaderPaths, const PipelineDesc &p_pipelineDesc);
+    vk::Extent2D getSwapChainExtent() const { return m_windowSize; }
     vk::CommandBuffer beginFrame();
     void beginRendering(vk::CommandBuffer p_cmd, bool p_clear = false);
     void endRendering(vk::CommandBuffer p_cmd);

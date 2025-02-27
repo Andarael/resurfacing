@@ -28,8 +28,8 @@ class App {
     Dragon dragon{};
 
     Camera m_camera;
-    bool m_animation;
-    float m_currentTime;
+    bool m_animation = true;
+    float m_currentTime = 0;
     float m_timeScale = 1.0f;
 
 private:
@@ -102,9 +102,28 @@ void App::drawUI() {
         }
         ImGui::EndMainMenuBar();
     }
+
+    m_camera.displayUI();
+
+    ImGui::Begin("Controls"); // Renamed for clarity
+    ImGui::SliderFloat("Time Scale", &m_timeScale, 0, 3);
+    ImGui::Separator();
+    m_globalShadingUBOData.displayUI();
+    ImGui::End();
+    
+    ImGui::Begin("Meshes");
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::PushID("Dragon");
+    dragon.displayUI();
+    ImGui::PopID();
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::End();
 }
 
 void App::handleEvent() {
+    
     m_camera.handleEvents();
 }
 
@@ -163,9 +182,10 @@ void App::drawFrame() {
     
     vk::CommandBuffer cmd = m_renderer.beginFrame();
     m_renderer.beginRendering(cmd, true);
+    vk::Extent2D extent = m_renderer.getSwapChainExtent();
     // dragon
-    cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, 800.0f, 600.0f, 0.0f, 1.0f));
-    cmd.setScissor(0, vk::Rect2D({0, 0}, {800, 600}));
+    cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, extent.width, extent.height, 0.0f, 1.0f));
+    cmd.setScissor(0, vk::Rect2D({0, 0}, extent));
     cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_parametricPipline.pipeline);
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_parametricPipline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
     dragon.bindAndDispatch(cmd, m_parametricPipline.layout);

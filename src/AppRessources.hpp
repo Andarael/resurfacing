@@ -124,6 +124,7 @@ struct Dragon : MeshData {
     void bindAndDispatch(vk::CommandBuffer &cmd, const vk::PipelineLayout &layout);
     void bindAndDispatchBaseMesh(vk::CommandBuffer &cmd, const vk::PipelineLayout &layout);
     void updateUBOs();
+    void displayUI();
     void animate(float currentTime, Renderer &renderer);
 
     void cleanup() {
