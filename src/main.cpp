@@ -108,6 +108,7 @@ void App::drawUI() {
                 glfwSetWindowShouldClose(m_window, true);
             ImGui::EndMenu();
         }
+        ImGui::Text("Total frame time (%.1f FPS/%.1fms)", ImGui::GetIO().Framerate, 1000.0f / ImGui::GetIO().Framerate);
         ImGui::EndMainMenuBar();
     }
 
