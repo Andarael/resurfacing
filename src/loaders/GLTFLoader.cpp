@@ -1,48 +1,11 @@
-﻿#pragma once
-#define TINYGLTF_IMPLEMENTATION
-#define TINYGLTF_NO_INCLUDE_STB_IMAGE
-#define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE 
-#define TINYGLTF_NO_EXTERNAL_IMAGE 0
-// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
-
-
 #include <tiny_gltf.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/quaternion.hpp>
-
-#include <iostream>
+#include "GLTFLoader.hpp"
 #include "defines.hpp"
-#include "ObjLoader.hpp"
 
-
-// Data structures
-struct Bone {
-    int nodeIndex; // Index of the node in the glTF model
-    std::string name; // Name of the bone
-    int parentIndex; // Index of the parent bone (-1 if root)
-    std::vector<int> childrenIndices; // Indices of child bones
-    glm::mat4 inverseBindMatrix; // Inverse bind matrix
-    glm::mat4 localTransform; // Local transform (animation applied)
-    glm::vec3 animTranslation; // Animated translation
-    glm::quat animRotation; // Animated rotation
-    glm::vec3 animScale; // Animated scale
-};
-
-struct Skeleton {
-    std::vector<Bone> bones;
-};
-
-// Helper functions
-glm::mat4 getNodeTransform(const tinygltf::Node &node);
-glm::vec3 getNodeTranslation(const tinygltf::Node &node);
-glm::quat getNodeRotation(const tinygltf::Node &node);
-glm::vec3 getNodeScale(const tinygltf::Node &node);
-
-// Function to extract skeleton
 void extractSkeleton(const tinygltf::Model &model, Skeleton &skeleton) {
     if (model.skins.empty()) {
         std::cerr << "No skins found in the glTF model." << std::endl;
@@ -70,7 +33,7 @@ void extractSkeleton(const tinygltf::Model &model, Skeleton &skeleton) {
         int nodeIndex = skin.joints[i];
         const tinygltf::Node &node = model.nodes[nodeIndex];
 
-        Bone &bone = skeleton.bones[i];
+        Skeleton::Bone &bone = skeleton.bones[i];
         bone.nodeIndex = nodeIndex;
         bone.name = node.name;
         bone.parentIndex = -1; // Default to -1 (no parent)
@@ -96,9 +59,8 @@ void extractSkeleton(const tinygltf::Model &model, Skeleton &skeleton) {
     }
 }
 
-// Recursive function to compute global transform
 void computeGlobalTransform(const Skeleton &skeleton, int boneIndex, std::vector<glm::mat4> &globalTransforms) {
-    const Bone &bone = skeleton.bones[boneIndex];
+    const Skeleton::Bone &bone = skeleton.bones[boneIndex];
 
     glm::mat4 localTransform = bone.localTransform;
 
@@ -117,36 +79,6 @@ void computeBoneMatrices(const Skeleton &skeleton, std::vector<glm::mat4> &boneM
         boneMatrices[i] = globalTransforms[i] * skeleton.bones[i].inverseBindMatrix;
     }
 }
-
-struct KeyFrame {
-    float time;
-    // For LINEAR and STEP
-    glm::vec3 translation;
-    glm::quat rotation;
-    glm::vec3 scale;
-
-    // For CUBICSPLINE (additional data)
-    glm::vec3 inTangentTranslation;
-    glm::vec3 outTangentTranslation;
-    glm::quat inTangentRotation;
-    glm::quat outTangentRotation;
-    glm::vec3 inTangentScale;
-    glm::vec3 outTangentScale;
-};
-
-
-struct AnimationChannel {
-    int boneIndex;
-    std::string path; // "translation", "rotation", or "scale"
-    std::string interpolation; // "LINEAR", "STEP", or "CUBICSPLINE"
-    std::vector<KeyFrame> keyframes;
-};
-
-struct Animation {
-    std::string name;
-    float duration;
-    std::vector<AnimationChannel> channels;
-};
 
 void extractAnimations(const tinygltf::Model &model, const Skeleton &skeleton, std::vector<Animation> &animations) {
     for (const auto &gltfAnimation : model.animations) {
@@ -252,11 +184,10 @@ void extractAnimations(const tinygltf::Model &model, const Skeleton &skeleton, s
     }
 }
 
-
 void updateSkeleton(const Animation &animation, float time, Skeleton &skeleton) {
     for (const auto &channel : animation.channels) {
         int boneIndex = channel.boneIndex;
-        Bone &bone = skeleton.bones[boneIndex];
+        Skeleton::Bone &bone = skeleton.bones[boneIndex];
 
         const auto &keyframes = channel.keyframes;
         size_t numKeyframes = keyframes.size();
@@ -284,9 +215,7 @@ void updateSkeleton(const Animation &animation, float time, Skeleton &skeleton) 
     }
 }
 
-
-// Helper functions to get node transformations
-glm::vec3 getNodeTranslation(const tinygltf::Node &node) {
+vec3 getNodeTranslation(const tinygltf::Node &node) {
     if (!node.translation.empty()) { return glm::vec3(node.translation[0], node.translation[1], node.translation[2]); }
     return glm::vec3(0.0f);
 }
@@ -296,41 +225,35 @@ glm::quat getNodeRotation(const tinygltf::Node &node) {
     return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 }
 
-glm::vec3 getNodeScale(const tinygltf::Node &node) {
+vec3 getNodeScale(const tinygltf::Node &node) {
     if (!node.scale.empty()) { return glm::vec3(node.scale[0], node.scale[1], node.scale[2]); }
     return glm::vec3(1.0f);
 }
 
-glm::mat4 getNodeTransform(const tinygltf::Node &node) {
+mat4 getNodeTransform(const tinygltf::Node &node) {
     glm::mat4 translation = glm::translate(glm::mat4(1.0f), getNodeTranslation(node));
     glm::mat4 rotation = glm::mat4_cast(getNodeRotation(node));
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), getNodeScale(node));
     return translation * rotation * scale;
 }
 
-bool loadGltfModel(const std::string &filepath, tinygltf::Model &model) {
+tinygltf::Model GLTFLoader::loadGltfModel(const std::string &filepath) {
     tinygltf::TinyGLTF loader;
+    tinygltf::Model model;
     std::string error, warning;
 
     bool loaded = loader.LoadASCIIFromFile(&model, &error, &warning, filepath);
-    if (!loaded) {
-        std::cerr << "Failed to load glTF file: " << error << std::endl;
-        return false;
-    }
+    if (!loaded) { ASSERT(false, "Failed to load glTF model"); }
 
     if (!warning.empty()) { std::cerr << "glTF Warning: " << warning << std::endl; }
 
-    return true;
+    return model;
 }
 
-bool arePositionsEqual(const vec3 &posA, const vec3 &posB, float epsilon = 1e-5f) {
-    // Use glm::distance or manual comparison with epsilon
-    return glm::distance(posA, posB) < epsilon;
-}
+bool arePositionsEqual(const vec3 &posA, const vec3 &posB, float epsilon) { return glm::distance(posA, posB) < epsilon; }
 
 void updateNgonMeshWithBoneData(const tinygltf::Model &model, NGonDataWBones &ngonMesh) {
-    ngonMesh.jointIndices.resize(ngonMesh.vertices.size());
-    ngonMesh.jointWeights.resize(ngonMesh.vertices.size());
+    // VERY SLOW, VERY NAIVE
     for (const auto &mesh : model.meshes) {
         for (const auto &primitive : mesh.primitives) {
             const auto &attributes = primitive.attributes;
