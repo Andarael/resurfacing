@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "defines.hpp"
-#include "objLoader.hpp"
+#include "loaders/objLoader.hpp"
 
 // Structs now use Structure of Arrays (SoA)
 struct HEVertices {
