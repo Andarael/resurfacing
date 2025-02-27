@@ -31,6 +31,7 @@ class App {
     bool m_animation = true;
     float m_currentTime = 0;
     float m_timeScale = 1.0f;
+    vk::Extent2D m_swapChainExtent;
 
 private:
     void updateSceneUBOs();
@@ -156,8 +157,13 @@ void App::run() {
             animate(dt);
         }
         drawUI();
-        
-        
+
+
+        const vk::Extent2D extent = m_renderer.getSwapChainExtent();
+        if (extent.width != m_swapChainExtent.width || extent.height != m_swapChainExtent.height) {
+            m_camera.resize(extent.width, extent.height);
+            m_swapChainExtent = extent;
+        }
         drawFrame();
         ImGui::EndFrame();
     }
