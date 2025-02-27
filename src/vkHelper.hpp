@@ -357,3 +357,18 @@ static vk::ShaderStageFlagBits inferShaderStageFromExt(std::string filename) {
     ASSERT(false, "Unsupported shader stage");
     return vk::ShaderStageFlagBits::eAll;
 }
+
+static vk::ImageAspectFlags inferAspectFromFormat(vk::Format format) {
+    vk::ImageAspectFlags res{};
+    bool test = true;
+    if (format == vk::Format::eD32Sfloat || format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint) {
+        res |= vk::ImageAspectFlagBits::eDepth;
+        test = false;
+    }
+    if (format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint || format == vk::Format::eS8Uint) {
+        res |= vk::ImageAspectFlagBits::eStencil;
+        test = false;
+    }
+    if (test) return vk::ImageAspectFlagBits::eColor;
+    return res;
+}

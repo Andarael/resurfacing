@@ -59,6 +59,7 @@ Texture Renderer::createTextureInternal(const vk::ImageCreateInfo &p_createInfo)
     vk::MemoryAllocateInfo allocInfo(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.size, findMemoryType(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
     VK_CHECK(m_logicalDevice.allocateMemory(&allocInfo, nullptr, &res.memory));
     m_logicalDevice.bindImageMemory(res.image, res.memory, 0);
+    res.defaultView = m_logicalDevice.createImageView({{}, res.image, vk::ImageViewType::e2D, res.format, {}, {inferAspectFromFormat(res.format), 0, 1, 0, 1}});
     return res;
 }
 
@@ -296,7 +297,6 @@ vk::Extent2D Renderer::createSwapchain() {
     m_depthImages.resize(m_maxFramesInFlight);
     vk::ImageViewCreateInfo imageViewCreateInfo = {{}, nullptr, vk::ImageViewType::e2D, surfaceFormat.surfaceFormat.format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
     vk::ImageCreateInfo depthImageCreateIngo = {{}, vk::ImageType::e2D, depthFormat, {outWindowSize.width, outWindowSize.height, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::SharingMode::eExclusive, 0, nullptr, vk::ImageLayout::eUndefined};
-    vk::ImageViewCreateInfo depthImageViewCreateInfo = {{}, nullptr, vk::ImageViewType::e2D, depthFormat, {}, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}};
     for (uint32 i = 0; i < m_maxFramesInFlight; i++) {
         m_nextImages[i].image = swapchainImages[i];
         imageViewCreateInfo.image = m_nextImages[i].image;
@@ -305,9 +305,6 @@ vk::Extent2D Renderer::createSwapchain() {
         m_nextImages[i].format = surfaceFormat.surfaceFormat.format;
 
         m_depthImages[i] = createTextureInternal(depthImageCreateIngo);
-        depthImageViewCreateInfo.image = m_depthImages[i].image;
-        VK_CHECK(m_logicalDevice.createImageView(&depthImageViewCreateInfo, nullptr, &m_depthImages[i].defaultView));
-        
     }
 
     m_frameResources.resize(m_maxFramesInFlight);
@@ -445,7 +442,7 @@ vk::CommandBuffer Renderer::beginFrame() {
 }
 
 void Renderer::beginRendering(vk::CommandBuffer p_cmd, bool p_clear) {
-    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eColorAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, {vk::ClearColorValue(1, 1, 1, 1)}}}};
+    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eColorAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, {vk::ClearColorValue(1.f, 1.f, 1.f, 1.f)}}}};
     const vk::RenderingAttachmentInfo depthAttachment = {m_depthImages[m_nextImageIndex].defaultView, vk::ImageLayout::eDepthStencilAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, {vk::ClearDepthStencilValue(1.0f, 0)}};
     const vk::RenderingInfo renderingInfo = {{}, {{0, 0}, m_windowSize}, 1, {}, renderingAttachments.size(), renderingAttachments.data(),&depthAttachment};
     cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex], vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eColorAttachmentOptimal);
@@ -459,7 +456,7 @@ void Renderer::endRendering(vk::CommandBuffer p_cmd) {
 }
 
 void Renderer::renderUI(vk::CommandBuffer p_cmd, bool p_clear) {
-    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eColorAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore,{vk::ClearColorValue(1, 1, 1, 1)}}}};
+    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eColorAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore,{vk::ClearColorValue(1.f, 1.f, 1.f, 1.f)}}}};
     const vk::RenderingInfo renderingInfo = {{}, {{0, 0}, m_windowSize}, 1, {}, renderingAttachments.size(), renderingAttachments.data()};
     cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex],vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eColorAttachmentOptimal);
     p_cmd.beginRendering(renderingInfo);

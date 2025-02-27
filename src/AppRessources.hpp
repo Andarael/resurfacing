@@ -95,7 +95,7 @@ struct MeshData {
     bool hasLut = false;
 
     void init(Renderer &renderer, const std::string &modelPath, const std::string &meshName, const std::string &gltfPath = "");
-    void loadLut(const std::string &path, Renderer &renderer, vk::CommandBuffer cmd);
+    LutData loadLut(const std::string &path, Renderer &renderer, vk::CommandBuffer cmd);
     void loadAOTexture(const std::string &path, Renderer &renderer, vk::CommandBuffer cmd) { aoTexture = loadAndUploadTexture(path, renderer, cmd, hasAOTexture); }
     void loadElementTypeTexture(const std::string &path, Renderer &renderer, vk::CommandBuffer cmd) { elementTypeTexture = loadAndUploadTexture(path, renderer, cmd, hasElementTypeTexture); }
 
@@ -106,11 +106,13 @@ protected:
 };
 
 struct Dragon : MeshData {
-    shaderInterface::ShadingUBO m_shadingUBOData;
+    shaderInterface::ShadingUBO shadingUBOData;
+    shaderInterface::ShadingUBO shadingUBODataBaseMesh;
     shaderInterface::HeUBO heUBOData;
     shaderInterface::ResurfacingUBO resurfacingUBOData;
 
-    UniformBuffer shadingUBO;
+    UniformBuffer shadingUBO; // this should be a dynamic ubo
+    UniformBuffer shadingUBOBaseMesh;
     UniformBuffer heUBO;
     UniformBuffer resurfacingUBO;
     Buffer boneMatStagingBuffer;

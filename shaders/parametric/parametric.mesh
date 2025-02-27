@@ -58,29 +58,25 @@ void offsetVertex(in out vec3 pos, in out vec3 normal) {
     seed = taskPayload.taskId;
 
     pos *= sqrt(taskPayload.area) * resurfacingUbo.scaling;
-
+        
     vec3 normal1 = resurfacingUbo.normal1;
     vec3 normal2 = resurfacingUbo.normal2;
-
+    // quick hack for demo :
+    // orienting parametric cages (scales) correctly when displaying multiple element types
+    if (resurfacingUbo.elementType >= 8 && taskPayload.elementType >= 8 && resurfacingUbo.hasElementTypeTexture) {
+    normal1 = vec3(0, 1, 0.3);
+    normal2 = vec3(0, 1, 0.3);
+    }
+    
     // normal perturbation
     seed = taskPayload.taskId;
     vec3 random1 = normalize(rand3(-1, 1));
     vec3 random2 = normalize(rand3(-1, 1));
-
     float scale = resurfacingUbo.normalPerturbation;
-
     normal1 += random1 * scale;
     normal2 += random2 * scale;
-
     normal1 = normalize(normal1);
     normal2 = normalize(normal2);
-
-    // quick hack for demo :
-    // orienting parametric cages (scales) correctly when displaying multiple element types
-    if (resurfacingUbo.elementType >= 8 && taskPayload.elementType >= 8 && resurfacingUbo.hasElementTypeTexture) {
-        normal1 = vec3(0, 1, 0.3);
-        normal2 = vec3(0, 1, 0.3);
-    }
 
     // Alternate rotation
     mat3 rotation = align_rotation_to_vector(normal1, taskPayload.normal);

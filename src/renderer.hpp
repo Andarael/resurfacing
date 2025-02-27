@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include "defines.hpp"
+#include "imgui.h"
 #include "vkHelper.hpp"
 
 #include <stb_image.h>
