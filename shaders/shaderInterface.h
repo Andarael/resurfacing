@@ -26,12 +26,11 @@ namespace shaderInterface {
 
 CONSTEXPR int SceneSet = 0;
 CONSTEXPR int HESet = 1;
-CONSTEXPR int OtherSet = 2;
+CONSTEXPR int PerObjectSet = 2;
 
 // set 0 - UBOs
 CONSTEXPR int U_viewBinding = 0;
 CONSTEXPR int U_globalShadingBinding = 1;
-CONSTEXPR int U_shadingBinding = 2;
 
 // set 1 - Half-Edge Data
 CONSTEXPR int B_heVec4TypeBinding = 0;
@@ -41,12 +40,13 @@ CONSTEXPR int B_heFloatTypeBinding = 3;
 
 // set 2 - Other Data
 CONSTEXPR int U_configBinding = 0;
-CONSTEXPR int B_lutVertexBufferBinding = 1;
-CONSTEXPR int B_skinJointsIndicesBinding = 2;
-CONSTEXPR int B_skinJointsWeightsBinding = 3;
-CONSTEXPR int B_skinBoneMatricesBinding = 4;
-CONSTEXPR int S_samplersBinding = 5;
-CONSTEXPR int T_texturesBinding = 6;
+CONSTEXPR int U_shadingBinding = 1;
+CONSTEXPR int B_lutVertexBufferBinding = 2;
+CONSTEXPR int B_skinJointsIndicesBinding = 3;
+CONSTEXPR int B_skinJointsWeightsBinding = 4;
+CONSTEXPR int B_skinBoneMatricesBinding = 5;
+CONSTEXPR int S_samplersBinding = 6;
+CONSTEXPR int T_texturesBinding = 7;
 
 
 // ============== Textures info ================
@@ -165,19 +165,30 @@ uint getVertexIDRelative(uint faceId, uint vertIndexRelative) {
 
 // ============== Other Data ================
 
-layout(std430, set = OtherSet, binding = B_lutVertexBufferBinding) readonly buffer lutVertexBuffer { vec4 lutVertex[]; };
-layout(std430, set = OtherSet, binding = B_skinJointsIndicesBinding) readonly buffer skinJointsIndices { vec4 jointsIndices[]; };
-layout(std430, set = OtherSet, binding = B_skinJointsWeightsBinding) readonly buffer skinJointsWeights { vec4 jointsWeights[]; };
-layout(std430, set = OtherSet, binding = B_skinBoneMatricesBinding) readonly buffer skinBoneMatrices { mat4 boneMatrices[]; };
+layout(std430, set = PerObjectSet, binding = B_lutVertexBufferBinding) readonly buffer lutVertexBuffer { vec4 lutVertex[]; };
+layout(std430, set = PerObjectSet, binding = B_skinJointsIndicesBinding) readonly buffer skinJointsIndices { vec4 jointsIndices[]; };
+layout(std430, set = PerObjectSet, binding = B_skinJointsWeightsBinding) readonly buffer skinJointsWeights { vec4 jointsWeights[]; };
+layout(std430, set = PerObjectSet, binding = B_skinBoneMatricesBinding) readonly buffer skinBoneMatrices { mat4 boneMatrices[]; };
 
-layout(set = OtherSet, binding = S_samplersBinding) uniform sampler samplers[samplerCount];
-layout(set = OtherSet, binding = T_texturesBinding) uniform texture2D textures[textureCount];
+layout(set = PerObjectSet, binding = S_samplersBinding) uniform sampler samplers[samplerCount];
+layout(set = PerObjectSet, binding = T_texturesBinding) uniform texture2D textures[textureCount];
 
 #endif
 
 // ============== UBOs ================
 #ifdef __cplusplus
-using uint = uint32;
+struct Bool32 {
+    uint32_t value;
+    Bool32() : value(0) {}
+    Bool32(bool b) : value(b ? 1 : 0) {}
+    operator bool() const { return value != 0; }
+    operator bool *() { return reinterpret_cast<bool *>(&value); }
+    operator const bool *() const { return reinterpret_cast<const bool *>(&value); }
+    bool *operator&() { return reinterpret_cast<bool *>(&value); }
+    const bool *operator&() const { return reinterpret_cast<const bool *>(&value); }
+};
+
+using glm::uint;
 #endif
 
 #ifndef __cplusplus
@@ -185,11 +196,13 @@ using uint = uint32;
 #define UBOStruct(ALIGNEMENT, SET, BINDING) layout(ALIGNEMENT, set = SET, binding = BINDING) uniform
 #define UBOName(NAME) NAME // we declare at the same time
 #define UBODefaultVal(V) // we can't have default values in GLSL
+#define BOOL bool
 #else
 #define PushConstantStruct struct
 #define UBOStruct(ALIGNEMENT, SET, BINDING) struct
 #define UBOName(NAME) // we dont want globals in cpu
 #define UBODefaultVal(V) = V // default value for UBOs
+#define BOOL Bool32
 #endif
 
 PushConstantStruct PushConstants {
@@ -205,12 +218,12 @@ UBOStruct(scalar, SceneSet, U_viewBinding) ViewUBO {
 }UBOName(viewUbo);
 
 UBOStruct(scalar, SceneSet, U_globalShadingBinding) GlobalShadingUBO {
-    bool filmic UBODefaultVal(true);
+    BOOL filmic UBODefaultVal(true);
     vec3 lightPos UBODefaultVal(vec3(0));
     vec3 lightColor UBODefaultVal(vec3(1));
     vec3 viewPos UBODefaultVal(vec3(0));
-    bool linkLight UBODefaultVal(true);
-    bool shadingHack UBODefaultVal(true);
+    BOOL linkLight UBODefaultVal(true);
+    BOOL shadingHack UBODefaultVal(true);
 #ifdef __cplusplus
     void displayUI() {
         if (ImGui::CollapsingHeader("Global Shading UBO")) {
@@ -226,20 +239,20 @@ UBOStruct(scalar, SceneSet, U_globalShadingBinding) GlobalShadingUBO {
 #endif
 }UBOName(globalShadingUbo);
 
-UBOStruct(scalar, SceneSet, U_shadingBinding) ShadingUBO {
+UBOStruct(scalar, PerObjectSet, U_shadingBinding) ShadingUBO {
     vec3 ambient UBODefaultVal(vec3(0));
     vec3 diffuse UBODefaultVal(vec3(1));
     vec3 specular UBODefaultVal(vec3(1));
     float shininess UBODefaultVal(32.f);
     float specularStrength UBODefaultVal(1.f);
-    bool doAo UBODefaultVal(false);
-    bool showElementTexture UBODefaultVal(false);
-    bool doShading UBODefaultVal(true);
-    bool displayNormals UBODefaultVal(false);
-    bool displayPrimId UBODefaultVal(false);
+    BOOL doAo UBODefaultVal(false);
+    BOOL showElementTexture UBODefaultVal(false);
+    BOOL doShading UBODefaultVal(true);
+    BOOL displayNormals UBODefaultVal(false);
+    BOOL displayPrimId UBODefaultVal(false);
     int colorMode UBODefaultVal(2);
-    bool displayLocalUv UBODefaultVal(false);
-    bool displayGlobalUv UBODefaultVal(false);
+    BOOL displayLocalUv UBODefaultVal(false);
+    BOOL displayGlobalUv UBODefaultVal(false);
 #ifdef __cplusplus
     void displayUI(std::string meshName = "") {
         float multiplier = 1.0f;
@@ -250,7 +263,7 @@ UBOStruct(scalar, SceneSet, U_shadingBinding) ShadingUBO {
             ImGui::SliderFloat("Shininess", &shininess, 1, 2048, "%.1f", ImGuiSliderFlags_Logarithmic);
             ImGui::SliderFloat("Specular Strength", &specularStrength, 0, 1000, "%.1f", ImGuiSliderFlags_Logarithmic);
             ImGui::PopItemWidth();
-            
+
             ImGui::Checkbox("Show Element Texture", &showElementTexture);
             ImGui::Checkbox("Do Shading", &doShading);
             ImGui::Checkbox("Display Normals", &displayNormals);
@@ -267,11 +280,11 @@ UBOStruct(scalar, SceneSet, U_shadingBinding) ShadingUBO {
 }UBOName(shadingUbo);
 
 #ifdef HE_PIPELINE
-UBOStruct(scalar, OtherSet, U_configBinding) HeUBO {
+UBOStruct(scalar, PerObjectSet, U_configBinding) HeUBO {
     int nbFaces UBODefaultVal(0);
-    bool colorPerPrimitive UBODefaultVal(false);
+    BOOL colorPerPrimitive UBODefaultVal(0);
     float normalOffset UBODefaultVal(0.0f);
-    bool doSkinning UBODefaultVal(false);
+    BOOL doSkinning UBODefaultVal(0);
 #ifdef __cplusplus
     void displayUI(std::string meshName = "") {
         if (ImGui::CollapsingHeader(("HE UBO " + meshName).c_str())) {
@@ -287,17 +300,17 @@ UBOStruct(scalar, OtherSet, U_configBinding) HeUBO {
 #endif
 
 #ifdef RESURFACING_PIPELINE
-UBOStruct(scalar, OtherSet, U_configBinding) ResurfacingUBO {
+UBOStruct(scalar, PerObjectSet, U_configBinding) ResurfacingUBO {
     int nbFaces UBODefaultVal(0);
     int nbVertices UBODefaultVal(0);
     int elementType UBODefaultVal(0);
     float scaling UBODefaultVal(.5f);
-    bool backfaceCulling UBODefaultVal(false);
+    BOOL backfaceCulling UBODefaultVal(false);
     float cullingThreshold UBODefaultVal(.5f);
-    bool doLod UBODefaultVal(false);
+    BOOL doLod UBODefaultVal(false);
     float lodFactor UBODefaultVal(1.f);
-    bool renderMesh UBODefaultVal(true);
-    bool hasElementTypeTexture UBODefaultVal(false);
+    BOOL renderMesh UBODefaultVal(true);
+    BOOL hasElementTypeTexture UBODefaultVal(false);
 
     float minorRadius UBODefaultVal(.4f);
     float majorRadius UBODefaultVal(1.f);
@@ -307,14 +320,14 @@ UBOStruct(scalar, OtherSet, U_configBinding) ResurfacingUBO {
     uvec2 MN UBODefaultVal(uvec2(16, 16));
     uvec2 minResolution UBODefaultVal(uvec2(4, 4));
     int edgeMode UBODefaultVal(0);
-    bool cyclicU UBODefaultVal(false);
-    bool cyclicV UBODefaultVal(false);
+    BOOL cyclicU UBODefaultVal(false);
+    BOOL cyclicV UBODefaultVal(false);
     uint Nx UBODefaultVal(0);
     uint Ny UBODefaultVal(0);
     uint degree UBODefaultVal(3);
     vec3 minLutExtent UBODefaultVal(vec3(0));
     vec3 maxLutExtent UBODefaultVal(vec3(0));
-    bool doSkinning UBODefaultVal(false);
+    BOOL doSkinning UBODefaultVal(false);
 #ifdef __cplusplus
     void displayUI(std::string meshName = "") {
         if (ImGui::CollapsingHeader(("Resurfacing UBO " + meshName).c_str())) {
@@ -384,7 +397,7 @@ UBOStruct(scalar, OtherSet, U_configBinding) ResurfacingUBO {
 #endif
 
 #ifdef PEBBLE_PIPELINE
-UBOStruct(scalar, OtherSet, U_configBinding) PebbleUBO {
+UBOStruct(scalar, PerObjectSet, U_configBinding) PebbleUBO {
     uint subdivisionLevel UBODefaultVal(3);
     uint subdivOffset UBODefaultVal(0);
     float extrusionAmount UBODefaultVal(0.1f);
@@ -395,31 +408,28 @@ UBOStruct(scalar, OtherSet, U_configBinding) PebbleUBO {
     float fillradius UBODefaultVal(0.f);
     float ringoffset UBODefaultVal(0.3f);
 
-    bool useLod UBODefaultVal(false);
+    BOOL useLod UBODefaultVal(false);
     float lodFactor UBODefaultVal(1.f);
-    bool allowLowLod UBODefaultVal(false);
+    BOOL allowLowLod UBODefaultVal(false);
     uint BoundingBoxType UBODefaultVal(0);
 
-    bool useCulling UBODefaultVal(false);
+    BOOL useCulling UBODefaultVal(false);
     float cullingThreshold UBODefaultVal(0.1f);
 
     float time UBODefaultVal(0.f);
 
-    bool enableRotation UBODefaultVal(false);
+    BOOL enableRotation UBODefaultVal(false);
     float rotationSpeed UBODefaultVal(0.1f);
     float scalingThreshold UBODefaultVal(0.1f);
 
-    bool doNoise UBODefaultVal(false);
+    BOOL doNoise UBODefaultVal(false);
     float noiseAmplitude UBODefaultVal(0.01f);
     float noiseFrequency UBODefaultVal(50.0f);
     float normalOffset UBODefaultVal(0.2f);
 #ifdef __cplusplus
     void displayUI(std::string meshName = "") {
         if (ImGui::CollapsingHeader(("Pebble UBO " + meshName).c_str())) {
-
-            if (ImGui::SliderInt("Subdivision Level", (int *)&subdivisionLevel, 0, 8)) {
-                subdivOffset = glm::min(subdivOffset, subdivisionLevel);
-            }
+            if (ImGui::SliderInt("Subdivision Level", (int *)&subdivisionLevel, 0, 8)) { subdivOffset = glm::min(subdivOffset, subdivisionLevel); }
 
             ImGui::SliderInt("Sudivision Offset", (int *)&subdivOffset, 0, glm::min(subdivisionLevel, 3u));
             ImGui::SliderFloat("Extrusion", &extrusionAmount, 0, 1, "%.3f");
@@ -476,12 +486,10 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
     switch (p_set) {
     case SceneSet: {
         bindings = {
-            {U_viewBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {U_globalShadingBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {U_shadingBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
+            {U_viewBinding, vk::DescriptorType::eUniformBuffer, 1, trueAllGraphics},
+            {U_globalShadingBinding, vk::DescriptorType::eUniformBuffer, 1, trueAllGraphics},
         };
         bindingFlags = {
-            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
         };
@@ -490,10 +498,10 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
 
     case HESet: {
         bindings = {
-            {B_heVec4TypeBinding, vk::DescriptorType::eStorageBuffer, vec4DataCount, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_heVec2TypeBinding, vk::DescriptorType::eStorageBuffer, vec2DataCount, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_heIntTypeBinding, vk::DescriptorType::eStorageBuffer, intDataCount, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_heFloatTypeBinding, vk::DescriptorType::eStorageBuffer, floatDataCount, vk::ShaderStageFlagBits::eAllGraphics},
+            {B_heVec4TypeBinding, vk::DescriptorType::eStorageBuffer, vec4DataCount, trueAllGraphics},
+            {B_heVec2TypeBinding, vk::DescriptorType::eStorageBuffer, vec2DataCount, trueAllGraphics},
+            {B_heIntTypeBinding, vk::DescriptorType::eStorageBuffer, intDataCount, trueAllGraphics},
+            {B_heFloatTypeBinding, vk::DescriptorType::eStorageBuffer, floatDataCount, trueAllGraphics},
         };
         bindingFlags = {
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
@@ -503,17 +511,19 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
         };
         break;
     }
-    case OtherSet: {
+    case PerObjectSet: {
         bindings = {
-            {U_configBinding, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_lutVertexBufferBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_skinJointsIndicesBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_skinJointsWeightsBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {B_skinBoneMatricesBinding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eAllGraphics},
-            {S_samplersBinding, vk::DescriptorType::eSampler, samplerCount, vk::ShaderStageFlagBits::eAllGraphics},
-            {T_texturesBinding, vk::DescriptorType::eSampledImage, textureCount, vk::ShaderStageFlagBits::eAllGraphics},
+            {U_configBinding, vk::DescriptorType::eUniformBuffer, 1, trueAllGraphics},
+            {U_shadingBinding, vk::DescriptorType::eUniformBuffer, 1, trueAllGraphics},
+            {B_lutVertexBufferBinding, vk::DescriptorType::eStorageBuffer, 1, trueAllGraphics},
+            {B_skinJointsIndicesBinding, vk::DescriptorType::eStorageBuffer, 1, trueAllGraphics},
+            {B_skinJointsWeightsBinding, vk::DescriptorType::eStorageBuffer, 1, trueAllGraphics},
+            {B_skinBoneMatricesBinding, vk::DescriptorType::eStorageBuffer, 1, trueAllGraphics},
+            {S_samplersBinding, vk::DescriptorType::eSampler, samplerCount, trueAllGraphics},
+            {T_texturesBinding, vk::DescriptorType::eSampledImage, textureCount, trueAllGraphics},
         };
         bindingFlags = {
+            {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::ePartiallyBound},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::ePartiallyBound},
@@ -522,6 +532,7 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::ePartiallyBound},
             {vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::ePartiallyBound},
         };
+        break;
     }
     default: ASSERT(false, "Invalid set");
     }
@@ -531,6 +542,7 @@ static vk::DescriptorSetLayout getDescriptorSetLayoutInfo(const int p_set, const
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
     layoutInfo.pBindings = bindings.data();
     layoutInfo.pNext = &bindingFlagsInfo;
+    layoutInfo.flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool;
     vk::DescriptorSetLayout res{};
     VK_CHECK(p_logicalDevice.createDescriptorSetLayout(&layoutInfo, nullptr, &res));
     return res;
