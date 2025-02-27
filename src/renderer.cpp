@@ -296,7 +296,7 @@ vk::Extent2D Renderer::createSwapchain() {
     m_nextImages.resize(m_maxFramesInFlight);
     m_depthImages.resize(m_maxFramesInFlight);
     vk::ImageViewCreateInfo imageViewCreateInfo = {{}, nullptr, vk::ImageViewType::e2D, surfaceFormat.surfaceFormat.format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
-    vk::ImageCreateInfo depthImageCreateIngo = {{}, vk::ImageType::e2D, depthFormat, {outWindowSize.width, outWindowSize.height, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::SharingMode::eExclusive, 0, nullptr, vk::ImageLayout::eUndefined};
+    vk::ImageCreateInfo depthImageCreateInfo = {{}, vk::ImageType::e2D, depthFormat, {outWindowSize.width, outWindowSize.height, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::SharingMode::eExclusive, 0, nullptr, vk::ImageLayout::eUndefined};
     for (uint32 i = 0; i < m_maxFramesInFlight; i++) {
         m_nextImages[i].image = swapchainImages[i];
         imageViewCreateInfo.image = m_nextImages[i].image;
@@ -304,7 +304,7 @@ vk::Extent2D Renderer::createSwapchain() {
         m_nextImages[i].dimensions = {outWindowSize.width, outWindowSize.height, 1};
         m_nextImages[i].format = surfaceFormat.surfaceFormat.format;
 
-        m_depthImages[i] = createTextureInternal(depthImageCreateIngo);
+        m_depthImages[i] = createTextureInternal(depthImageCreateInfo);
     }
 
     m_frameResources.resize(m_maxFramesInFlight);
