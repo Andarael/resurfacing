@@ -5,6 +5,7 @@ GitHub Project: [Andarael/resurfacing](https://github.com/Andarael/resurfacing)
 This project demonstrates the use of GPU mesh shaders to enhance object surfaces in real-time. The application is written in C++ and GLSL, utilizing the Vulkan API.
 
 ## Tested Configuration
+
 - **Operating System**: Windows
 - **GPU**: NVIDIA GPU (RTX Ampere or Ada architecture)
 - **Graphics API**: Vulkan, with shaderc.
@@ -13,15 +14,16 @@ DISCLAIMER, minimal configuration requires a GPU supporting Mesh Shader.
 Trying to run this on a non-Windows machine or a non-Nvidia GPU is at your own risk.
 
 ## Compilation
+
 - A `.bat` is provided to generate a visual studio solution.
 - Shaders are automatically compiled once at build time.
-- Note : <!--Shader compilation and  hot-reloading --> Mesh loading are way faster in the release build. 
-
+- Note : <!--Shader compilation and  hot-reloading --> Mesh loading is way faster in the release build.
 
 ## ReShade Integration
-Reshade package can be used for post-processing effects such as ambiant occlusion. 
+
+Reshade package can be used for post-processing effects such as ambiant occlusion.
 Reshade source code needed to be modified to make it compatible with our Vulkan engine.
-As of the first public release of our demo application, no reshade integration is provided yet. 
+As of the first public release of our demo application, no reshade integration is provided yet.
 ReShade support is planned for the next build.
 
 <!--
@@ -48,14 +50,14 @@ Base mesh can be rendered alone or in addition to the resurfaced model.
 In the resurfacing settings in individual models settings, the user can select the type of element to be used for the resurfacing.
 Element parametric properties (such as torus radii) can be controlled, as well as orientation and scaling.
 Element's maximum resolution can be set independently on u and v directions.
-By default, the mapping function F maps an  element by face and an element by vertex.
+By default, the mapping function F maps an element by face and an element by vertex.
 Normal1 and Normal2 allows for vertex and face issued elements to be oriented in different ways.
 
 ### Control cage based surfaces
 
 <!-- Control cages can be loaded from an `.obj` file. -->
 When the element type is set to `B-Spline' and a control cage has been loaded, the elements will use the control cage to sample the parametric surface.
-Control cages must be provided in a quad grid format, similar to Blender's "Nurbs Surface" object.
+Control cages must be provided in a quad grid format, similar to Blender's *"Nurbs Surface"* object.
 The default control cage is a shaped as a scale.
 
 ### Pebbles
@@ -71,18 +73,21 @@ Procedural surface noise can be enabled on the pebbles.
 
 ### Performance metrics
 
-Detailed GPU performance metrics are captured per pipeline, using precise GPU counters. Global application performance is displayed in the top bar.
+Detailed GPU performance metrics are displayed as *"GPU Time"*, using precise GPU counters.
+Global application performance (including CPU Skinig operations and shading) is also displayed in the top bar.
 
 ## License
 
-This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) License**.  
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) License**.
 
-**You may:**  
-- Share — Copy and redistribute the material in any medium or format.  
-- Adapt — Remix, transform, and build upon the material.  
+**You may:**
 
-**Under the following terms:**  
-- **Attribution** — You must give appropriate credit and indicate if changes were made.  
-- **NonCommercial** — You may not use the material for commercial purposes.  
+- Share — Copy and redistribute the material in any medium or format.
+- Adapt — Remix, transform, and build upon the material.
 
-Full license details: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)  
+**Under the following terms:**
+
+- **Attribution** — You must give appropriate credit and indicate if changes were made.
+- **NonCommercial** — You may not use the material for commercial purposes.
+
+Full license details: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
