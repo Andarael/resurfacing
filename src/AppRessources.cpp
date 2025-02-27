@@ -157,6 +157,8 @@ void Dragon::init(Renderer &renderer, const std::string &modelPath, const std::s
     resurfacingUBOData.elementType = 9;
     resurfacingUBOData.backfaceCulling = true;
     resurfacingUBOData.cullingThreshold = 0.1f;
+    shadingUBOData.doShading = true;
+    shadingUBOData.diffuse = vec3(0.8, 0.0, 0.0);
 
     // Allocate extra descriptor set for the base mesh
     std::array<vk::DescriptorSetLayout, 1> layouts = {perObjectDescriptorSetLayout};
