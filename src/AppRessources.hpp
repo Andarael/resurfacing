@@ -133,3 +133,43 @@ struct Dragon : MeshData {
         // Implement resource cleanup as necessary
     }
 };
+
+struct Coat : MeshData {
+    shaderInterface::ShadingUBO shadingUBOData;
+    shaderInterface::ResurfacingUBO resurfacingUBOData;
+
+    UniformBuffer shadingUBO;
+    UniformBuffer resurfacingUBO;
+    Buffer boneMatStagingBuffer;
+
+    void init(Renderer& renderer, const std::string& modelPath, const std::string& meshName,
+              const std::string& gltfPath, const std::string& aoPath);
+
+    void bindAndDispatch(vk::CommandBuffer &cmd, const vk::PipelineLayout &layout);
+    void updateUBOs();
+    void displayUI();
+    void animate(float currentTime, Renderer &renderer);
+
+    void cleanup() {
+        // Implement resource cleanup as necessary
+    }
+};
+
+struct Ground : MeshData {
+    shaderInterface::ShadingUBO shadingUBOData;
+    shaderInterface::PebbleUBO pebbleUBOData;
+
+    UniformBuffer shadingUBO;
+    UniformBuffer pebbleUBO;
+
+    void init(Renderer& renderer, const std::string& modelPath, const std::string& meshName);
+
+    void bindAndDispatch(vk::CommandBuffer &cmd, const vk::PipelineLayout &layout);
+    void updateUBOs();
+    void displayUI();
+    void animate(float currentTime, Renderer &renderer);
+
+    void cleanup() {
+        // Implement resource cleanup as necessary
+    }
+};

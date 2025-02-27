@@ -98,13 +98,13 @@ void MeshData::primeDescriptorSets(Renderer &renderer) {
          vk::DescriptorType::eStorageBuffer, nullptr, heDescriptorBufferInfosInt.data(), nullptr},
         {heDescriptorSet, shaderInterface::B_heFloatTypeBinding, 0, shaderInterface::floatDataCount,
          vk::DescriptorType::eStorageBuffer, nullptr, heDescriptorBufferInfosFloat.data(), nullptr},
-        {perObjectDescriptorSet, shaderInterface::B_skinJointsIndicesBinding, 0, 1,
-         vk::DescriptorType::eStorageBuffer, nullptr, skinBufferInfos.data(), nullptr},
-        {perObjectDescriptorSet, shaderInterface::B_skinJointsWeightsBinding, 0, 1,
-         vk::DescriptorType::eStorageBuffer, nullptr, skinBufferInfos.data() + 1, nullptr},
-        {perObjectDescriptorSet, shaderInterface::B_skinBoneMatricesBinding, 0, 1,
-         vk::DescriptorType::eStorageBuffer, nullptr, skinBufferInfos.data() + 2, nullptr}
     };
+
+    if (isSkeletal) {
+        descriptorWrites.emplace_back(perObjectDescriptorSet, shaderInterface::B_skinJointsIndicesBinding, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, skinBufferInfos.data(), nullptr);
+        descriptorWrites.emplace_back(perObjectDescriptorSet, shaderInterface::B_skinJointsWeightsBinding, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, skinBufferInfos.data() + 1, nullptr);
+        descriptorWrites.emplace_back(perObjectDescriptorSet, shaderInterface::B_skinBoneMatricesBinding, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, skinBufferInfos.data() + 2, nullptr);
+    }
 
     renderer.m_logicalDevice.updateDescriptorSets(descriptorWrites, nullptr);
 }
@@ -265,3 +265,137 @@ void Dragon::animate(float currentTime, Renderer &renderer) {
         endSingleTimeCommands(cmd, renderer.m_logicalDevice, renderer.m_transientCommandPool, renderer.m_graphicsQueue);
     }
 }
+
+void Coat::init(Renderer &renderer, const std::string &modelPath, const std::string &meshName, const std::string &gltfPath, const std::string &aoPath) {
+    MeshData::init(renderer, modelPath, meshName, gltfPath);
+
+    renderMode = MeshData::RenderMode::PARAMETRIC;
+    renderBaseMesh = false;
+    resurfacingUBOData.minorRadius = 0.2f;
+    resurfacingUBOData.scaling = 0.5f;
+    resurfacingUBOData.normal1 = vec3(-1, 1, 1);
+    resurfacingUBOData.normal2 = vec3(.3, -.5, 1);
+    resurfacingUBOData.normalPerturbation = 0.1f;
+    resurfacingUBOData.MN = uvec2(16, 16);
+    resurfacingUBOData.doLod = true;
+    resurfacingUBOData.lodFactor = 4.0f;
+    resurfacingUBOData.elementType = 0;
+    resurfacingUBOData.backfaceCulling = true;
+    resurfacingUBOData.cullingThreshold = 0.1f;
+
+    shadingUBOData.doShading = true;
+    shadingUBOData.diffuse = vec3(0.5);
+    shadingUBOData.shininess = 32;
+    shadingUBOData.specularStrength = 8;
+    shadingUBOData.doAo = true;
+
+    vk::CommandBuffer cmdBuffer = beginSingleTimeCommands(renderer.m_logicalDevice, renderer.m_transientCommandPool);
+    loadAOTexture(aoPath, renderer, cmdBuffer);
+    aoTexture.sampler = renderer.m_linearSampler;
+    endSingleTimeCommands(cmdBuffer, renderer.m_logicalDevice, renderer.m_transientCommandPool, renderer.m_graphicsQueue);
+
+    shadingUBO = renderer.createUniformBuffer(sizeof(shaderInterface::ShadingUBO));
+    resurfacingUBO = renderer.createUniformBuffer(sizeof(shaderInterface::ResurfacingUBO));
+    boneMatStagingBuffer = renderer.createStagingBuffer(sizeof(mat4) * boneMatCount);
+
+    // Update descriptor sets for uniform buffers (base mesh)
+    std::vector<vk::DescriptorBufferInfo> skinBufferInfos = {
+        vk::DescriptorBufferInfo(jointsIndices.buffer, 0, VK_WHOLE_SIZE),
+        vk::DescriptorBufferInfo(jointsWeights.buffer, 0, VK_WHOLE_SIZE),
+        vk::DescriptorBufferInfo(boneMats.buffer, 0, VK_WHOLE_SIZE)
+    };
+
+    vk::DescriptorImageInfo aoImageInfo(aoTexture.sampler, aoTexture.defaultView, vk::ImageLayout::eShaderReadOnlyOptimal);
+    vk::DescriptorBufferInfo resurfacingUBOBufferInfo(resurfacingUBO.buffer, 0, VK_WHOLE_SIZE);
+    vk::DescriptorBufferInfo shadingUBOBufferInfo(shadingUBO.buffer, 0, VK_WHOLE_SIZE);
+    std::vector<vk::WriteDescriptorSet> resurfacingUBOWrite = {
+        {perObjectDescriptorSet, shaderInterface::U_configBinding, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &resurfacingUBOBufferInfo, nullptr},
+        {perObjectDescriptorSet, shaderInterface::U_shadingBinding, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &shadingUBOBufferInfo, nullptr},
+        {perObjectDescriptorSet, shaderInterface::T_texturesBinding, 0, 1, vk::DescriptorType::eSampledImage, &aoImageInfo, nullptr, nullptr},
+        {perObjectDescriptorSet, shaderInterface::S_samplersBinding, 0, 1, vk::DescriptorType::eSampler, &aoImageInfo, nullptr, nullptr}
+    };
+    renderer.m_logicalDevice.updateDescriptorSets(resurfacingUBOWrite, nullptr);
+
+    resurfacingUBOData.nbFaces = heMesh.nbFaces;
+    resurfacingUBOData.nbVertices = heMesh.nbVertices;
+    resurfacingUBOData.hasElementTypeTexture = false;
+    resurfacingUBOData.doSkinning = isSkeletal;
+    shadingUBOData.doAo = hasAOTexture;
+
+    updateUBOs();
+}
+
+void Coat::bindAndDispatch(vk::CommandBuffer &cmd, const vk::PipelineLayout &layout) {
+    std::array<vk::DescriptorSet, 2> sets = {heDescriptorSet, perObjectDescriptorSet};
+    cmd.pushConstants(layout, trueAllGraphics, 0, sizeof(mat4), &modelMatrix);
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, shaderInterface::HESet, sets, {});
+    cmd.drawMeshTasksEXT(heMesh.nbFaces + heMesh.nbVertices, 1, 1);
+}
+
+void Coat::updateUBOs() {
+    memcpy(shadingUBO.mappedMemory, &shadingUBOData, sizeof(shaderInterface::ShadingUBO));
+    memcpy(resurfacingUBO.mappedMemory, &resurfacingUBOData, sizeof(shaderInterface::ResurfacingUBO));
+}
+
+void Coat::displayUI() {
+    resurfacingUBOData.displayUI(name);
+    shadingUBOData.displayUI(name);
+}
+
+void Coat::animate(float currentTime, Renderer &renderer) {
+    if (!animations.empty()) {
+        updateSkeleton(animations[0], currentTime, skeleton);
+        std::vector<mat4> boneMatrices;
+        computeBoneMatrices(skeleton, boneMatrices);
+        vk::CommandBuffer cmd = beginSingleTimeCommands(renderer.m_logicalDevice, renderer.m_transientCommandPool);
+        renderer.uploadToBuffer(boneMatStagingBuffer, boneMats, cmd, boneMatrices);
+        endSingleTimeCommands(cmd, renderer.m_logicalDevice, renderer.m_transientCommandPool, renderer.m_graphicsQueue);
+    }
+}
+
+void Ground::init(Renderer &renderer, const std::string &modelPath, const std::string &meshName) {
+    MeshData::init(renderer, modelPath, meshName);
+
+    renderMode = MeshData::RenderMode::PEBBLE;
+    renderBaseMesh = false;
+    shadingUBOData.doShading = false;
+    pebbleUBOData.enableRotation = true;
+    pebbleUBOData.subdivisionLevel = 4;
+    pebbleUBOData.extrusionAmount = 0.045f;
+    pebbleUBOData.roundness = 2.0f;
+    pebbleUBOData.doNoise = true;
+    pebbleUBOData.noiseAmplitude = 0.01f;
+    pebbleUBOData.noiseFrequency = 35.0f;
+
+    shadingUBO = renderer.createUniformBuffer(sizeof(shaderInterface::ShadingUBO));
+    pebbleUBO = renderer.createUniformBuffer(sizeof(shaderInterface::ResurfacingUBO));
+
+    vk::DescriptorBufferInfo configUBOBufferInfo(pebbleUBO.buffer, 0, VK_WHOLE_SIZE);
+    vk::DescriptorBufferInfo shadingUBOBufferInfo(shadingUBO.buffer, 0, VK_WHOLE_SIZE);
+    std::vector<vk::WriteDescriptorSet> resurfacingUBOWrite = {
+        {perObjectDescriptorSet, shaderInterface::U_configBinding, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &configUBOBufferInfo, nullptr},
+        {perObjectDescriptorSet, shaderInterface::U_shadingBinding, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &shadingUBOBufferInfo, nullptr},
+    };
+    renderer.m_logicalDevice.updateDescriptorSets(resurfacingUBOWrite, nullptr);
+
+    updateUBOs();
+}
+
+void Ground::bindAndDispatch(vk::CommandBuffer &cmd, const vk::PipelineLayout &layout) {
+    std::array<vk::DescriptorSet, 2> sets = {heDescriptorSet, perObjectDescriptorSet};
+    cmd.pushConstants(layout, trueAllGraphics, 0, sizeof(mat4), &modelMatrix);
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, shaderInterface::HESet, sets, {});
+    cmd.drawMeshTasksEXT(heMesh.nbFaces + heMesh.nbVertices, 1, 1);
+}
+
+void Ground::updateUBOs() {
+    memcpy(shadingUBO.mappedMemory, &shadingUBOData, sizeof(shaderInterface::ShadingUBO));
+    memcpy(pebbleUBO.mappedMemory, &pebbleUBOData, sizeof(shaderInterface::PebbleUBO));
+}
+
+void Ground::displayUI() {
+    pebbleUBOData.displayUI(name);
+    shadingUBOData.displayUI(name);
+}
+
+void Ground::animate(float currentTime, Renderer &renderer) { pebbleUBOData.time = currentTime; }

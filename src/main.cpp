@@ -16,6 +16,7 @@ class App {
     Renderer m_renderer{};
     Pipeline m_hePipeline{};
     Pipeline m_parametricPipline{};
+    Pipeline m_pebblePipeline{};
 
     vk::DescriptorSetLayout m_uboDescriptorSetLayout;
     vk::DescriptorSet m_uboDescriptorSet;
@@ -26,6 +27,8 @@ class App {
     UniformBuffer m_globalShadingUBO;
     
     Dragon dragon{};
+    Coat dragonCoat{};
+    Ground ground{};
 
     Camera m_camera;
     bool m_animation = true;
@@ -90,8 +93,12 @@ void App::init() {
     
     
     dragon.init(m_renderer, "assets/demo/dragon/dragon_8k.obj", "Dragon", "assets/demo/dragon/dragon_8k.gltf", "assets/parametric_luts/scale_lut.obj", "assets/demo/dragon/dargon_8k_ao.png", "assets/demo/dragon/dragon_element_type_map_2k.png");
+    dragonCoat.init(m_renderer, "assets/demo/dragon/dragon_coat.obj", "Coat", "assets/demo/dragon/dragon_coat.gltf", "assets/demo/dragon/dragon_coat_ao.png");
+    ground.init(m_renderer, "assets/demo/ground.obj", "Ground");
+
     m_hePipeline = m_renderer.createPipeline({"shaders/halfEdges/halfEdge.mesh","shaders/halfEdges/halfEdge.frag"}, PipelineDesc{});
     m_parametricPipline = m_renderer.createPipeline({"shaders/parametric/parametric.task","shaders/parametric/parametric.mesh","shaders/parametric/parametric.frag"}, PipelineDesc{});
+    m_pebblePipeline = m_renderer.createPipeline({"shaders/pebble/pebble.task", "shaders/pebble/pebble.mesh", "shaders/pebble/pebble.frag"}, PipelineDesc{});
 }
 
 void App::drawUI() {
@@ -120,6 +127,9 @@ void App::drawUI() {
     ImGui::PopID();
     ImGui::Separator();
     ImGui::Separator();
+    ImGui::PushID("Coat");
+    dragonCoat.displayUI();
+    ImGui::PopID();
     ImGui::End();
 }
 
@@ -137,8 +147,9 @@ void App::animate(float p_deltaTime) {
     }
 
     // update time
-    // Ground.animate(m_currentTime);
     dragon.animate(m_currentTime, m_renderer);
+    dragonCoat.animate(m_currentTime, m_renderer);
+    ground.animate(m_currentTime, m_renderer);
 }
 
 void App::run() {
@@ -178,9 +189,12 @@ void App::updateSceneUBOs() {
     m_viewUBOData.cameraPosition = vec4(m_camera.getPosition(), 1);
     m_viewUBOData.near = m_camera.getZNear();
     m_viewUBOData.far = m_camera.getZFar();
+    
     memcpy(m_viewUBO.mappedMemory, &m_viewUBOData, sizeof(shaderInterface::ViewUBO));
     memcpy(m_globalShadingUBO.mappedMemory, &m_globalShadingUBOData, sizeof(shaderInterface::GlobalShadingUBO));
     dragon.updateUBOs();
+    dragonCoat.updateUBOs();
+    ground.updateUBOs();
 }
 
 void App::drawFrame() {
@@ -195,9 +209,16 @@ void App::drawFrame() {
     cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_parametricPipline.pipeline);
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_parametricPipline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
     dragon.bindAndDispatch(cmd, m_parametricPipline.layout);
+    dragonCoat.bindAndDispatch(cmd, m_parametricPipline.layout);
+    
     cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_hePipeline.pipeline);
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_hePipeline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
     dragon.bindAndDispatchBaseMesh(cmd, m_hePipeline.layout);
+
+    cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_pebblePipeline.pipeline);
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pebblePipeline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
+    ground.bindAndDispatch(cmd, m_pebblePipeline.layout);
+    
     m_renderer.endRendering(cmd);
     
     // UI pass
