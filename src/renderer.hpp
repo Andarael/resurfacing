@@ -6,9 +6,11 @@
 #include "defines.hpp"
 #include "vkHelper.hpp"
 
+#include <stb_image.h>
+
 struct GLFWwindow;
 
-class renderer {
+class Renderer {
 public:
     vk::Instance m_instance{};
     vk::DebugUtilsMessengerEXT m_callback{VK_NULL_HANDLE};
@@ -23,30 +25,44 @@ public:
 
     vk::Sampler m_linearSampler{};
     vk::Sampler m_nearestSampler{};
-    
+
 public:
-    renderer() = default;
-    renderer(GLFWwindow *window, bool vSync);
-    void init();
+    void init(GLFWwindow *window, bool vSync);
     void cleanup();
-    Pipeline createPipeline(const std::vector<std::string>&p_shaderPaths, const PipelineDesc &p_pipelineDesc);
-    vk::CommandBuffer beginRendering();
+    Pipeline createPipeline(const std::vector<std::string> &p_shaderPaths, const PipelineDesc &p_pipelineDesc);
+    vk::CommandBuffer beginFrame();
+    void beginRendering(vk::CommandBuffer p_cmd, bool p_clear = false);
     void endRendering(vk::CommandBuffer p_cmd);
-    void presentFrame();
-    void renderUI(vk::CommandBuffer p_cmd);
+    void endFrame(vk::CommandBuffer p_cmd);
 
     UniformBuffer createUniformBuffer(uint32 p_size);
-    Buffer createStagingBuffer(const void* p_data, uint32 p_size);
-    void freeStagingBuffers();
+    Buffer createStagingBuffer(uint32 p_size);
 
     template <typename T>
     Buffer createAndUploadBuffer(vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, vk::BufferUsageFlags p_usage) {
-        Buffer stagingBuffer = createStagingBuffer((void*)p_data.data(), p_data.size() * sizeof(T));
         Buffer buffer = createBufferInternal({{}, p_data.size() * sizeof(T), p_usage | vk::BufferUsageFlagBits::eTransferDst});
-        vk::BufferCopy copyRegion(0, 0, p_data.size() * sizeof(T));
-        p_commandBuffer.copyBuffer(stagingBuffer.buffer, buffer.buffer, copyRegion);
+        uploadDataToBufferInternal(buffer, p_commandBuffer, p_data.data(), p_data.size() * sizeof(T));
         return buffer;
     }
+
+    template <typename T>
+    Texture createAndUploadTexture(vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, uvec2 p_size, vk::Format p_format) {
+        Texture texture = createTextureInternal({{}, vk::ImageType::e2D, p_format, {p_size.x,p_size.y, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst});
+        uploadDataToImageInternal(texture, p_commandBuffer, p_data.data(), p_data.size() * sizeof(T));
+        return texture;
+    }
+
+    template <typename T>
+    void uploadToBuffer(Buffer p_dstBuffer, vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, uint32 p_offset = 0) { uploadDataToBufferInternal(p_dstBuffer, p_commandBuffer, p_data.data(), p_data.size() * sizeof(T), p_offset); }
+
+    template <typename T>
+    void uploadToBuffer(Buffer &p_stagingBuffer, Buffer &p_dstBuffer, vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data, uint32 p_offset = 0) { uploadDataToBufferInternal(p_stagingBuffer, p_dstBuffer, p_commandBuffer, p_data.data(), p_data.size() * sizeof(T), p_offset); }
+
+    template <typename T>
+    void uploadToTexture(Texture &p_dstImage, vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data) { uploadDataToImageInternal(p_dstImage, p_commandBuffer, p_data.data(), p_data.size() * sizeof(T)); }
+
+    template <typename T>
+    void uploadToTexture(Buffer &p_stagingBuffer, Texture &p_dstImage, vk::CommandBuffer p_commandBuffer, const std::vector<T> &p_data) { uploadDataToImageInternal(p_stagingBuffer, p_dstImage, p_commandBuffer, p_data.data(), p_data.size() * sizeof(T)); }
 
 
 private:
@@ -59,7 +75,6 @@ private:
 
     GLFWwindow *m_window{};
 
-    
 
     QueueFamilyIndices m_queueFamilyIndices{};
     vk::PhysicalDeviceLimits m_deviceLimits;
@@ -82,12 +97,6 @@ private:
     bool m_vsync{false};
     uint32 m_frameIndex{0};
 
-    // RT
-    
-    SampledTexture m_colorTexture{};
-    SampledTexture m_depthTexture{};
-
-    std::vector<Buffer> m_usedStagingBuffers{}; // for batching staging buffer freeing
 private:
     void createInstance();
     void createSurface();
@@ -101,13 +110,18 @@ private:
     void createFrameData();
     void createDescriptorPool();
     void initImGui();
-    void buildRenderTargets();
+    void presentFrame();
 
 
     uint32 findMemoryType(uint32 p_typeFilter, vk::MemoryPropertyFlags p_properties) const;
 
-    Buffer createBufferInternal(const vk::BufferCreateInfo& p_createInfo, const vk::MemoryPropertyFlags p_memProperties = vk::MemoryPropertyFlagBits::eDeviceLocal);
-    Texture createTextureInternal(const vk::ImageCreateInfo& p_createInfo);
+    Buffer createBufferInternal(const vk::BufferCreateInfo &p_createInfo, const vk::MemoryPropertyFlags p_memProperties = vk::MemoryPropertyFlagBits::eDeviceLocal);
+    Texture createTextureInternal(const vk::ImageCreateInfo &p_createInfo);
+    
+    void copyToStagingMem(Buffer &staging, const void *p_data, uint32 p_size);
+    void uploadDataToBufferInternal(Buffer &dstBuffer, vk::CommandBuffer p_commandBuffer, const void *data, uint32 size, uint32 offset = 0);
+    void uploadDataToBufferInternal(Buffer &p_stagingBuffer, Buffer &p_dstBuffer, vk::CommandBuffer p_commandBuffer, const void *p_data, uint32 p_size, uint32 p_offset = 0);
+    void uploadDataToImageInternal(Texture &dstImage, vk::CommandBuffer p_commandBuffer, const void *p_data, uint32 p_size);
+    void uploadDataToImageInternal(Buffer &p_stagingBuffer, Texture &p_dstImage, vk::CommandBuffer p_commandBuffer, const void *p_data, uint32 p_size);
+
 };
-
-
