@@ -53,7 +53,7 @@ Buffer Renderer::createBufferInternal(const vk::BufferCreateInfo &p_createInfo, 
 }
 
 Texture Renderer::createTextureInternal(const vk::ImageCreateInfo &p_createInfo) {
-    Texture res{};
+    Texture res{{}, {}, p_createInfo.format, p_createInfo.initialLayout,uvec3(p_createInfo.extent.width, p_createInfo.extent.height, p_createInfo.extent.depth)};
     VK_CHECK(m_logicalDevice.createImage(&p_createInfo, nullptr, &res.image));
     vk::StructureChain<vk::MemoryRequirements2> memRequirements = m_logicalDevice.getImageMemoryRequirements2(vk::ImageMemoryRequirementsInfo2(res.image));
     vk::MemoryAllocateInfo allocInfo(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.size, findMemoryType(memRequirements.get<vk::MemoryRequirements2>().memoryRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal));
@@ -88,18 +88,18 @@ void Renderer::uploadDataToImageInternal(Texture &p_dstImage, vk::CommandBuffer 
     m_usedStagingBuffers.push_back(stagingBuffer);
     copyToStagingMem(stagingBuffer, p_data, p_size);
     vk::BufferImageCopy2 copyRegion(0, 0, 0, {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0, 0, 0}, {p_dstImage.dimensions.x, p_dstImage.dimensions.y, p_dstImage.dimensions.z});
-    vk::ImageLayout oldLayout = p_dstImage.currentLayout;
-    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eTransferDstOptimal);
+    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
     p_commandBuffer.copyBufferToImage2({stagingBuffer.buffer, p_dstImage.image, vk::ImageLayout::eTransferDstOptimal, 1, &copyRegion});
-    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, oldLayout);   
+    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eTransferDstOptimal, p_dstImage.currentLayout == vk::ImageLayout::eUndefined ? vk::ImageLayout::eGeneral : p_dstImage.currentLayout);
+    p_dstImage.currentLayout = p_dstImage.currentLayout == vk::ImageLayout::eUndefined ? vk::ImageLayout::eGeneral : p_dstImage.currentLayout;
 }
 void Renderer::uploadDataToImageInternal(Buffer &p_stagingBuffer, Texture &p_dstImage, vk::CommandBuffer p_commandBuffer,const void *p_data, uint32 p_size) {
     copyToStagingMem(p_stagingBuffer, p_data, p_size);
     vk::BufferImageCopy2 copyRegion(0, 0, 0, {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0, 0, 0}, {p_dstImage.dimensions.x, p_dstImage.dimensions.y, p_dstImage.dimensions.z});
-    vk::ImageLayout oldLayout = p_dstImage.currentLayout;
-    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eTransferDstOptimal);
+    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
     p_commandBuffer.copyBufferToImage2({p_stagingBuffer.buffer, p_dstImage.image, vk::ImageLayout::eTransferDstOptimal, 1, &copyRegion});
-    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, oldLayout);   
+    cmdTransitionImageLayout(p_commandBuffer, p_dstImage, vk::ImageLayout::eTransferDstOptimal, p_dstImage.currentLayout == vk::ImageLayout::eUndefined ? vk::ImageLayout::eGeneral : p_dstImage.currentLayout);
+    p_dstImage.currentLayout = p_dstImage.currentLayout == vk::ImageLayout::eUndefined ? vk::ImageLayout::eGeneral : p_dstImage.currentLayout;
 }
 
 
@@ -278,7 +278,6 @@ vk::Extent2D Renderer::createSwapchain() {
 
     // Clamp preferredImageCount to valid range [minImageCount, maxImageCount]
     m_maxFramesInFlight = std::clamp(preferredImageCount, minImageCount, maxImageCount);
-    m_imageFormat = surfaceFormat.surfaceFormat.format;
 
     vk::SwapchainCreateInfoKHR ci = {{}, m_surface, m_maxFramesInFlight, surfaceFormat.surfaceFormat.format, surfaceFormat.surfaceFormat.colorSpace, outWindowSize, 1, vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst, vk::SharingMode::eExclusive, 0, nullptr, capabilities2.surfaceCapabilities.currentTransform, vk::CompositeAlphaFlagBitsKHR::eOpaque, presentMode, VK_TRUE};
     uint32 queueFamilyIndices[] = {(uint32)m_queueFamilyIndices.graphicsQueueIndex, (uint32)m_queueFamilyIndices.presentQueueIndex};
@@ -291,14 +290,24 @@ vk::Extent2D Renderer::createSwapchain() {
     VK_CHECK(m_logicalDevice.createSwapchainKHR(&ci, nullptr, &m_swapChain));
     std::vector<vk::Image> swapchainImages = m_logicalDevice.getSwapchainImagesKHR(m_swapChain);
     ASSERT(m_maxFramesInFlight == swapchainImages.size(), "Wrong swapchain setup");
-
+    vk::Format depthFormat = findDepthFormat(m_device);
+    
     m_nextImages.resize(m_maxFramesInFlight);
-
-    vk::ImageViewCreateInfo imageViewCreateInfo{{}, nullptr, vk::ImageViewType::e2D, m_imageFormat, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+    m_depthImages.resize(m_maxFramesInFlight);
+    vk::ImageViewCreateInfo imageViewCreateInfo = {{}, nullptr, vk::ImageViewType::e2D, surfaceFormat.surfaceFormat.format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+    vk::ImageCreateInfo depthImageCreateIngo = {{}, vk::ImageType::e2D, depthFormat, {outWindowSize.width, outWindowSize.height, 1}, 1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::SharingMode::eExclusive, 0, nullptr, vk::ImageLayout::eUndefined};
+    vk::ImageViewCreateInfo depthImageViewCreateInfo = {{}, nullptr, vk::ImageViewType::e2D, depthFormat, {}, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}};
     for (uint32 i = 0; i < m_maxFramesInFlight; i++) {
         m_nextImages[i].image = swapchainImages[i];
         imageViewCreateInfo.image = m_nextImages[i].image;
         VK_CHECK(m_logicalDevice.createImageView(&imageViewCreateInfo, nullptr, &m_nextImages[i].defaultView));
+        m_nextImages[i].dimensions = {outWindowSize.width, outWindowSize.height, 1};
+        m_nextImages[i].format = surfaceFormat.surfaceFormat.format;
+
+        m_depthImages[i] = createTextureInternal(depthImageCreateIngo);
+        depthImageViewCreateInfo.image = m_depthImages[i].image;
+        VK_CHECK(m_logicalDevice.createImageView(&depthImageViewCreateInfo, nullptr, &m_depthImages[i].defaultView));
+        
     }
 
     m_frameResources.resize(m_maxFramesInFlight);
@@ -312,7 +321,7 @@ vk::Extent2D Renderer::createSwapchain() {
     {
         // transition every image to present layout
         vk::CommandBuffer cmdBuffer = beginSingleTimeCommands(m_logicalDevice, m_transientCommandPool);
-        for (uint32 i = 0; i < m_maxFramesInFlight; i++) { cmdTransitionImageLayout(cmdBuffer, m_nextImages[i], vk::ImageLayout::ePresentSrcKHR); }
+        for (uint32 i = 0; i < m_maxFramesInFlight; i++) { cmdTransitionImageLayout(cmdBuffer, m_nextImages[i], vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR); }
         endSingleTimeCommands(cmdBuffer, m_logicalDevice, m_transientCommandPool, m_graphicsQueue);
     }
     return outWindowSize;
@@ -365,7 +374,7 @@ void Renderer::initImGui() {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    vk::PipelineRenderingCreateInfo dynRenderingAttachamentInfo = {{}, 1, &m_imageFormat};
+    vk::PipelineRenderingCreateInfo dynRenderingAttachamentInfo = {{}, 1, &m_nextImages[0].format};
     ImGui_ImplGlfw_InitForVulkan(m_window, true);
     ImGui_ImplVulkan_InitInfo initInfo = {};
     initInfo.Instance = m_instance;
@@ -404,8 +413,8 @@ Pipeline Renderer::createPipeline(const std::vector<std::string> &p_shaderPaths,
     const vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, descriptorSetLayouts.size(), descriptorSetLayouts.data(), 1, &pushConstantRange);
     VK_CHECK(m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &pipeline.layout));
 
-    const std::array<vk::Format, 1> imageFormats = {{m_imageFormat}}; // same as render target
-    const vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{{}, static_cast<uint32>(imageFormats.size()), imageFormats.data(), findDepthFormat(m_device)};
+    const std::array<vk::Format, 1> imageFormats = {{ m_nextImages[0].format}}; // same as render target
+    const vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo = {{}, static_cast<uint32>(imageFormats.size()), imageFormats.data(), m_depthImages[0].format};
     const vk::PipelineDynamicStateCreateInfo dynamicStateCreateInfo = {{}, static_cast<uint32>(p_pipelineDesc.dynamicStates.size()), p_pipelineDesc.dynamicStates.data()};
     const vk::PipelineViewportStateCreateInfo viewportStateCreateInfo = {{}, 1, nullptr, 1, nullptr};
     vk::GraphicsPipelineCreateInfo pipelineCreateInfo({}, shaderStages.size(), shaderStages.data(), &p_pipelineDesc.vertexInputStateCreateInfo, &p_pipelineDesc.inputAssemblyStateCreateInfo, nullptr, &viewportStateCreateInfo, &p_pipelineDesc.rasterizationStateCreateInfo, &p_pipelineDesc.multisampleStateCreateInfo, &p_pipelineDesc.depthStencilStateCreateInfo, &p_pipelineDesc.colorBlendStateCreateInfo, &dynamicStateCreateInfo, pipeline.layout);
@@ -436,15 +445,27 @@ vk::CommandBuffer Renderer::beginFrame() {
 }
 
 void Renderer::beginRendering(vk::CommandBuffer p_cmd, bool p_clear) {
-    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore}}};
-    const vk::RenderingInfo renderingInfo = {{}, {{0, 0}, m_windowSize}, 1, {}, renderingAttachments.size(), renderingAttachments.data()};
-    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex], vk::ImageLayout::eColorAttachmentOptimal);
+    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eColorAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, {vk::ClearColorValue(1, 1, 1, 1)}}}};
+    const vk::RenderingAttachmentInfo depthAttachment = {m_depthImages[m_nextImageIndex].defaultView, vk::ImageLayout::eDepthStencilAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, {vk::ClearDepthStencilValue(1.0f, 0)}};
+    const vk::RenderingInfo renderingInfo = {{}, {{0, 0}, m_windowSize}, 1, {}, renderingAttachments.size(), renderingAttachments.data(),&depthAttachment};
+    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex], vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eColorAttachmentOptimal);
+    cmdTransitionImageLayout(p_cmd, m_depthImages[m_nextImageIndex], vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal, vk::ImageAspectFlagBits::eDepth);
     p_cmd.beginRendering(renderingInfo);
 }
 
 void Renderer::endRendering(vk::CommandBuffer p_cmd) {
     p_cmd.endRendering();
-    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex], vk::ImageLayout::ePresentSrcKHR);
+    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex],vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
+}
+
+void Renderer::renderUI(vk::CommandBuffer p_cmd, bool p_clear) {
+    const std::array<vk::RenderingAttachmentInfo, 1> renderingAttachments = {{{m_nextImages[m_nextImageIndex].defaultView, vk::ImageLayout::eColorAttachmentOptimal, {}, nullptr, {}, p_clear ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore,{vk::ClearColorValue(1, 1, 1, 1)}}}};
+    const vk::RenderingInfo renderingInfo = {{}, {{0, 0}, m_windowSize}, 1, {}, renderingAttachments.size(), renderingAttachments.data()};
+    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex],vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eColorAttachmentOptimal);
+    p_cmd.beginRendering(renderingInfo);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), p_cmd);
+    p_cmd.endRendering();
+    cmdTransitionImageLayout(p_cmd, m_nextImages[m_nextImageIndex],vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
 }
 
 void Renderer::endFrame(vk::CommandBuffer p_cmd) {

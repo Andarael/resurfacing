@@ -193,13 +193,10 @@ void App::drawFrame() {
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_hePipeline.layout, 0, 1, &m_uboDescriptorSet, 0, nullptr);
     dragon.bindAndDispatchBaseMesh(cmd, m_hePipeline.layout);
     m_renderer.endRendering(cmd);
-
-
+    
     // UI pass
-    ImGui::Render(); // prepare draw data
-    m_renderer.beginRendering(cmd);
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-    m_renderer.endRendering(cmd);
+    ImGui::Render(); // finalize ImGui draw data
+    m_renderer.renderUI(cmd);
     m_renderer.endFrame(cmd);
 }
 

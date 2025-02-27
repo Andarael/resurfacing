@@ -34,6 +34,7 @@ public:
     vk::CommandBuffer beginFrame();
     void beginRendering(vk::CommandBuffer p_cmd, bool p_clear = false);
     void endRendering(vk::CommandBuffer p_cmd);
+    void renderUI(vk::CommandBuffer p_cmd, bool p_clear = false);
     void endFrame(vk::CommandBuffer p_cmd);
 
     UniformBuffer createUniformBuffer(uint32 p_size);
@@ -81,10 +82,10 @@ private:
     QueueFamilyIndices m_queueFamilyIndices{};
     vk::PhysicalDeviceLimits m_deviceLimits;
     bool m_supportMeshQueries;
-
-    vk::Format m_imageFormat;
+    
     vk::Extent2D m_windowSize{};
     std::vector<Texture> m_nextImages{};
+    std::vector<Texture> m_depthImages{};
     std::vector<FrameResources> m_frameResources{};
     uint32_t m_currentFrame = 0;
     uint32_t m_nextImageIndex = 0;

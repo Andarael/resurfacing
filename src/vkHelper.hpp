@@ -96,6 +96,7 @@ static std::pair<vk::PipelineStageFlags2, vk::AccessFlags2> makePipelineStageAcc
     switch (state) {
     case vk::ImageLayout::eUndefined: return std::make_pair(PipelineStageBits::eTopOfPipe, AccessBits::eNone);
     case vk::ImageLayout::eColorAttachmentOptimal: return std::make_pair(PipelineStageBits::eColorAttachmentOutput, AccessBits::eColorAttachmentRead | AccessBits::eColorAttachmentWrite);
+    case vk::ImageLayout::eDepthStencilAttachmentOptimal: return std::make_pair(PipelineStageBits::eEarlyFragmentTests | PipelineStageBits::eLateFragmentTests, AccessBits::eDepthStencilAttachmentRead | AccessBits::eDepthStencilAttachmentWrite);
     case vk::ImageLayout::eShaderReadOnlyOptimal: return std::make_pair(PipelineStageBits::eFragmentShader | PipelineStageBits::eComputeShader | PipelineStageBits::ePreRasterizationShaders, AccessBits::eShaderRead);
     case vk::ImageLayout::eTransferDstOptimal: return std::make_pair(PipelineStageBits::eTransfer, AccessBits::eTransferWrite);
     case vk::ImageLayout::eGeneral: return std::make_pair(PipelineStageBits::eComputeShader | PipelineStageBits::eTransfer,
@@ -147,10 +148,9 @@ static vk::ImageMemoryBarrier2 createImageMemoryBarrier(vk::Image image, vk::Ima
 }
 
 // Transition the image layout 
-static void cmdTransitionImageLayout(vk::CommandBuffer p_cmd, Texture p_texture, vk::ImageLayout p_newLayout, vk::ImageAspectFlags p_aspectMask = vk::ImageAspectFlagBits::eColor) {
-    const vk::ImageMemoryBarrier2 barrier = createImageMemoryBarrier(p_texture.image, p_texture.currentLayout, p_newLayout, {p_aspectMask, 0, 1, 0, 1});
+static void cmdTransitionImageLayout(vk::CommandBuffer p_cmd, Texture& p_texture, vk::ImageLayout p_oldLayout, vk::ImageLayout p_newLayout, vk::ImageAspectFlags p_aspectMask = vk::ImageAspectFlagBits::eColor) {
+    const vk::ImageMemoryBarrier2 barrier = createImageMemoryBarrier(p_texture.image, p_oldLayout, p_newLayout, {p_aspectMask, 0, 1, 0, 1});
     p_cmd.pipelineBarrier2({{}, {}, {}, {}, {}, 1, &barrier});
-    p_texture.currentLayout = p_newLayout; // not true as the command buffer is not executed yet but good enough for our use case
 }
 
 static vk::AccessFlags2 inferAccessMaskFromStage(vk::PipelineStageFlags2 stage, bool src) {
