@@ -2,6 +2,9 @@
 
 GitHub Project: [Andarael/resurfacing](https://github.com/Andarael/resurfacing)
 
+Paper link : [Real-time procedural resurfacing using GPU mesh shader
+](https://onlinelibrary.wiley.com/doi/abs/10.1111/cgf.70075)
+
 This project demonstrates the use of GPU mesh shaders to enhance object surfaces in real-time. The application is written in C++ and GLSL, utilizing the Vulkan API.
 
 ## Tested Configuration
